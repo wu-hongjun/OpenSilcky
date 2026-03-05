@@ -1,43 +1,35 @@
 site_name: OpenSlicky
 site_description: Open-source driver & tools for the Lexcelon Slicky USB status light
-site_url: https://openslicky.dev
-repo_url: https://github.com/openslicky/openslicky
-repo_name: openslicky/openslicky
+site_url: https://wu-hongjun.github.io/OpenSilcky/
+repo_url: https://github.com/wu-hongjun/OpenSilcky
+repo_name: wu-hongjun/OpenSilcky
 
 theme:
   name: material
+  features:
+    - navigation.tabs
+    - navigation.indexes
+    - navigation.top
+    - navigation.tracking
+    - search.suggest
+    - search.highlight
+    - content.code.copy
   palette:
     - scheme: default
-      primary: deep purple
-      accent: amber
+      primary: white
+      accent: black
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - scheme: slate
-      primary: deep purple
-      accent: amber
+      primary: black
+      accent: white
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
-  features:
-    - navigation.sections
-    - navigation.expand
-    - navigation.top
-    - content.code.copy
-    - search.highlight
-
-markdown_extensions:
-  - admonition
-  - pymdownx.details
-  - pymdownx.superfences
-  - pymdownx.tabbed:
-      alternate_style: true
-  - pymdownx.highlight:
-      anchor_linenums: true
-  - pymdownx.inlinehilite
-  - attr_list
-  - toc:
-      permalink: true
+  font:
+    text: Roboto
+    code: Roboto Mono
 
 nav:
   - Home: index.md
@@ -52,3 +44,21 @@ nav:
   - Development:
       - Contributing: development/contributing.md
       - Architecture: development/architecture.md
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
