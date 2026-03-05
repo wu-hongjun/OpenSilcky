@@ -1,0 +1,35 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/slicky-core",
+    "crates/slicky-cli",
+    "crates/slicky-daemon",
+    "crates/slicky-ffi",
+]
+
+[workspace.dependencies]
+# Shared across crates
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+env_logger = "0.11"
+
+# Device communication
+hidapi = "2"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Daemon
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "net"] }
+axum = "0.8"
+hyper-util = { version = "0.1", features = ["tokio"] }
+tower = "0.5"
+reqwest = { version = "0.12", features = ["json"] }
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true

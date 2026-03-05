@@ -1,0 +1,15 @@
+[package]
+name = "slicky-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "slicky"
+path = "src/main.rs"
+
+[dependencies]
+slicky-core = { path = "../slicky-core" }
+clap = { workspace = true }
+anyhow = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }

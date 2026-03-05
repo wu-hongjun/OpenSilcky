@@ -1,0 +1,15 @@
+[package]
+name = "slicky-ffi"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+slicky-core = { path = "../slicky-core" }
+log = { workspace = true }
+env_logger = { workspace = true }
+
+[build-dependencies]
+cbindgen = "0.27"
