@@ -13,7 +13,11 @@ The Slicky is a USB-connected desk light that communicates your availability via
 | **slickyd** (daemon) | HTTP daemon with REST API and Slack integration |
 | **slicky-ffi** | C FFI bindings for building native GUIs (Swift, etc.) |
 
-## Quick Start
+## Install
+
+Pre-built `.dmg` releases are available for **macOS Apple Silicon** (ARM64) on the [Releases](https://github.com/wu-hongjun/OpenSilcky/releases) page. Download, mount, and copy the binaries to a directory in your `PATH`.
+
+For other platforms (macOS Intel, Linux), build from source:
 
 ```bash
 # Install dependencies (macOS)
