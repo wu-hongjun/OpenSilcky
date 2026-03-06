@@ -586,11 +586,32 @@ struct InstallerView: View {
 struct MenuBarView: View {
     @EnvironmentObject var vm: ViewModel
 
+    private let statusPresets: [(name: String, label: String, color: Color)] = [
+        ("available", "Available", Color(red: 0, green: 1, blue: 0)),
+        ("busy", "Busy", Color(red: 1, green: 0, blue: 0)),
+        ("away", "Away", Color(red: 1, green: 1, blue: 0)),
+        ("in-meeting", "In Meeting", Color(red: 1, green: 1, blue: 1)),
+    ]
+
+    private let gridColumns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 4)
+
     var body: some View {
         VStack(spacing: 12) {
             UpdateBannerView()
             StatusSection()
             if vm.deviceConnected {
+                Divider()
+                LazyVGrid(columns: gridColumns, spacing: 6) {
+                    ForEach(statusPresets, id: \.name) { preset in
+                        ColorButton(
+                            label: preset.label,
+                            color: preset.color,
+                            isSelected: vm.currentPreset == preset.name
+                        ) {
+                            vm.setPreset(preset.name)
+                        }
+                    }
+                }
                 Divider()
                 MenuBarSlackRow()
             }
