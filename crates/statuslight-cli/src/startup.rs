@@ -73,7 +73,13 @@ fn plist_contents(statuslightd_path: &str) -> String {
   <true/>
 
   <key>KeepAlive</key>
-  <true/>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+  </dict>
+
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
 
   <key>StandardOutPath</key>
   <string>/tmp/statuslight-daemon.log</string>
@@ -251,6 +257,13 @@ mod tests {
     fn plist_is_valid_xml_declaration() {
         let plist = plist_contents("/usr/local/bin/statuslightd");
         assert!(plist.starts_with("<?xml version=\"1.0\""));
+    }
+
+    #[test]
+    fn plist_has_throttle_interval() {
+        let plist = plist_contents("/usr/local/bin/statuslightd");
+        assert!(plist.contains("<key>ThrottleInterval</key>"));
+        assert!(plist.contains("<integer>30</integer>"));
     }
 
     #[test]
