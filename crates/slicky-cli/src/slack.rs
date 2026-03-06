@@ -4,33 +4,14 @@
 //! and paste three tokens (app, bot, user) via a guided wizard.
 
 use std::io::{self, Write};
+use std::process::Command;
 
 use anyhow::{bail, ensure, Context, Result};
 use slicky_core::Config;
 
-const HEX_CHARS: [u8; 16] = *b"0123456789ABCDEF";
-
-/// Percent-encode a string per RFC 3986 (unreserved chars pass through).
-fn percent_encode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(b as char)
-            }
-            _ => {
-                out.push('%');
-                out.push(char::from(HEX_CHARS[(b >> 4) as usize]));
-                out.push(char::from(HEX_CHARS[(b & 0x0F) as usize]));
-            }
-        }
-    }
-    out
-}
-
-/// Build the Slack app-creation URL with the manifest pre-filled.
-fn manifest_url() -> String {
-    let manifest = serde_json::json!({
+/// The Slack app manifest JSON for Status Light.
+fn manifest_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
         "display_information": {
             "name": "Status Light",
             "description": "USB status light controller"
@@ -64,9 +45,25 @@ fn manifest_url() -> String {
             "org_deploy_enabled": false,
             "token_rotation_enabled": false
         }
-    });
-    let encoded = percent_encode(&manifest.to_string());
-    format!("https://api.slack.com/apps?new_app=1&manifest_json={encoded}")
+    }))
+    .expect("manifest serialization cannot fail")
+}
+
+const APP_CREATION_URL: &str = "https://api.slack.com/apps?new_app=1";
+
+/// Copy text to the macOS clipboard via pbcopy.
+fn copy_to_clipboard(text: &str) -> bool {
+    Command::new("pbcopy")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            if let Some(ref mut stdin) = child.stdin {
+                stdin.write_all(text.as_bytes())?;
+            }
+            child.wait()
+        })
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 /// Prompt the user to press Enter to continue (accepts empty input).
@@ -78,10 +75,10 @@ fn prompt_continue(msg: &str) -> Result<()> {
     Ok(())
 }
 
-/// `slicky slack open-setup` — open browser with pre-filled manifest (non-interactive).
+/// `slicky slack open-setup` — copy manifest to clipboard and open browser (non-interactive).
 pub fn open_setup() -> Result<()> {
-    let url = manifest_url();
-    open::that(&url).context("failed to open browser")?;
+    copy_to_clipboard(&manifest_json());
+    open::that(APP_CREATION_URL).context("failed to open browser")?;
     Ok(())
 }
 
@@ -116,16 +113,21 @@ pub fn configure(app_token: &str, bot_token: &str, user_token: &str) -> Result<(
 pub fn setup() -> Result<()> {
     println!("=== Status Light — Slack Setup ===\n");
 
-    // Step 1: Open browser with pre-filled manifest.
+    // Step 1: Copy manifest to clipboard, open browser.
     println!("Step 1: Create your Slack app");
-    println!("  Opening Slack with a pre-filled app manifest...");
-    let url = manifest_url();
-    if open::that(&url).is_err() {
-        println!("  Could not open browser. Visit this URL manually:");
-        println!("  {url}");
+    let manifest = manifest_json();
+    if copy_to_clipboard(&manifest) {
+        println!("  Manifest copied to clipboard!");
+    } else {
+        println!("  Manifest (copy this):\n");
+        println!("{manifest}\n");
+    }
+    if open::that(APP_CREATION_URL).is_err() {
+        println!("  Open this URL: {APP_CREATION_URL}");
     }
     println!();
-    println!("  Select your workspace, review the permissions, and click Create.");
+    println!("  Click 'From a manifest', pick your workspace,");
+    println!("  switch to the JSON tab, paste (Cmd+V), and click Create.");
     prompt_continue("  Press Enter when done... ")?;
 
     // Step 2: App-level token.

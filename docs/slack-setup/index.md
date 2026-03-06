@@ -16,7 +16,7 @@ OpenSlicky uses a **per-user Slack app** model. You create your own Slack app fr
 slicky slack setup
 ```
 
-Your browser opens automatically with a pre-filled Slack app manifest. Select your workspace and click **Create**.
+The manifest JSON is copied to your clipboard and the Slack app creation page opens. Click **From a manifest**, pick your workspace, switch to the **JSON** tab, paste (**Cmd+V**), and click **Create**.
 
 ### Step 2: Generate App Token
 

@@ -930,10 +930,19 @@ struct SlackSetupWizard: View {
             Label("Create Your Slack App", systemImage: "plus.app")
                 .font(.headline)
 
-            Text("Click the button below to open Slack with a pre-filled app configuration. Select your workspace, review the permissions, and click **Create**.")
+            Text("Click the button below to copy the app manifest and open Slack.")
                 .font(.callout)
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("1. Click **From a manifest**")
+                Text("2. Pick your workspace")
+                Text("3. Switch to the **JSON** tab, paste (**Cmd+V**)")
+                Text("4. Click **Next**, then **Create**")
+            }
+            .font(.callout)
+            .foregroundColor(.secondary)
 
             Spacer()
 
