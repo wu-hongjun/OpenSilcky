@@ -156,8 +156,19 @@ The Slicky-1.0 has a physical button that cycles through a fixed color sequence:
 
 - The button cycling is handled entirely in firmware
 - The button does **not** generate HID input reports
-- Whether CMD 0x0B reflects the button-cycled color (vs. the last HID-set color) is under investigation
-- The cycle colors (white, red, yellow, green) correspond to common status indicators and could be mapped to statuses (e.g., available, busy, away, in-meeting)
+- **CMD 0x0B does reflect the button-cycled color** (confirmed experimentally)
+
+### Button Color → Status Mapping
+
+| Button Color | Hex | Status Preset |
+|---|---|---|
+| White | `#FFFFFF` | In Meeting |
+| Red | `#FF0000` | Busy |
+| Yellow | `#FFFF00` | Away |
+| Green | `#00FF00` | Available |
+| Off | `#000000` | Off (clear status) |
+
+All button-cycle colors use pure channel values (`0x00` or `0xFF`), enabling exact-match detection. The daemon polls CMD 0x0B every 2 seconds to detect button presses and can optionally sync the detected status to Slack.
 
 ## Communication Pattern
 

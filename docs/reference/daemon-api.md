@@ -170,6 +170,34 @@ Read the current color directly from the device hardware (if the driver supports
 
 ---
 
+### `GET /button-status`
+
+Get the current button-detected status.
+
+**Response 200:**
+
+```json
+{
+  "detected_preset": "busy",
+  "device_color": { "r": 255, "g": 0, "b": 0, "hex": "#FF0000" },
+  "polling_enabled": true,
+  "slack_sync": false
+}
+```
+
+When no button-cycle color is active, `detected_preset` is `null`. When no color has been set, `device_color` is `null`.
+
+**Configuration:** Button polling is controlled by the `[button]` section in `config.toml`:
+
+```toml
+[button]
+enabled = true        # Enable button polling (default: true)
+poll_interval = 2     # Polling interval in seconds (default: 2)
+slack_sync = false    # Sync button status to Slack (default: false)
+```
+
+---
+
 ### `GET /slack/status`
 
 Get Slack integration status.
