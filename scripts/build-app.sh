@@ -63,6 +63,10 @@ swiftc \
   -framework AppKit \
   -parse-as-library
 
+# --- Ad-hoc codesign (prevents "damaged" Gatekeeper error) -----------------
+echo "==> Ad-hoc signing app bundle..."
+codesign --force --deep -s - "$APP"
+
 echo "==> App bundle created at: $APP"
 
 # --- Build DMG (if create-dmg is available) --------------------------------
@@ -87,6 +91,9 @@ if command -v create-dmg &>/dev/null; then
   # Embed the shell script inside the applet for Terminal-based uninstall too
   cp "$REPO_ROOT/scripts/uninstall.sh" "$UNINSTALL_APP/Contents/Resources/uninstall.sh"
   chmod +x "$UNINSTALL_APP/Contents/Resources/uninstall.sh"
+
+  # Ad-hoc sign the uninstaller applet
+  codesign --force --deep -s - "$UNINSTALL_APP"
 
   # create-dmg fails if target exists
   rm -f "$DMG_PATH"
