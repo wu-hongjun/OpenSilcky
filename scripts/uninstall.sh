@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 #
-# uninstall.sh — Fully remove OpenSlicky from macOS
+# uninstall.sh — Fully remove StatusLight from macOS
 #
 # Works standalone (even if the .app is already deleted).
 # Can be run from the DMG, from the app bundle, or from anywhere.
 #
 # Usage:
 #   bash uninstall.sh              # interactive (asks before removing config)
-#   bash uninstall.sh --purge      # also removes ~/.config/openslicky/
+#   bash uninstall.sh --purge      # also removes ~/.config/statuslight/
 #   bash uninstall.sh --keep-config # skip config removal prompt
 #
 
 set -euo pipefail
 
-PLIST_LABEL="com.openslicky.daemon"
+PLIST_LABEL="com.statuslight.daemon"
 PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 SYMLINK_DIR="/usr/local/bin"
-APP_PATH="/Applications/OpenSlicky.app"
-CONFIG_DIR="$HOME/.config/openslicky"
+APP_PATH="/Applications/StatusLight.app"
+CONFIG_DIR="$HOME/.config/statuslight"
 
 PURGE=false
 KEEP_CONFIG=false
@@ -39,17 +39,17 @@ wait_for_exit() {
     pkill -9 -x "$name" 2>/dev/null || true
 }
 
-echo "==> OpenSlicky Uninstaller"
+echo "==> StatusLight Uninstaller"
 echo ""
 
-# --- 1. Quit running OpenSlicky app ------------------------------------------
-if pgrep -x OpenSlicky &>/dev/null; then
-    echo "Quitting OpenSlicky app..."
-    osascript -e 'tell application "OpenSlicky" to quit' 2>/dev/null || true
-    wait_for_exit OpenSlicky
-    echo "  OpenSlicky app quit."
+# --- 1. Quit running StatusLight app ------------------------------------------
+if pgrep -x StatusLight &>/dev/null; then
+    echo "Quitting StatusLight app..."
+    osascript -e 'tell application "StatusLight" to quit' 2>/dev/null || true
+    wait_for_exit StatusLight
+    echo "  StatusLight app quit."
 else
-    echo "OpenSlicky app is not running."
+    echo "StatusLight app is not running."
 fi
 
 # --- 2. Unload LaunchAgent ---------------------------------------------------
@@ -66,9 +66,9 @@ if [[ -f "$PLIST_PATH" ]]; then
     echo "  Removed LaunchAgent plist."
 fi
 
-# --- 3. Kill all slicky processes and wait for confirmed exit -----------------
-echo "Stopping slicky processes..."
-for proc in slickyd slicky; do
+# --- 3. Kill all statuslight processes and wait for confirmed exit -----------------
+echo "Stopping statuslight processes..."
+for proc in statuslightd statuslight; do
     if pkill -x "$proc" 2>/dev/null; then
         echo "  Sent SIGTERM to $proc."
         wait_for_exit "$proc"
@@ -78,19 +78,19 @@ done
 
 # --- 4. Turn off the light (now that no other process holds the HID handle) ---
 echo "Turning off light..."
-if [[ -x "$SYMLINK_DIR/slicky" ]]; then
-    "$SYMLINK_DIR/slicky" off 2>/dev/null && echo "  Light turned off." \
+if [[ -x "$SYMLINK_DIR/statuslight" ]]; then
+    "$SYMLINK_DIR/statuslight" off 2>/dev/null && echo "  Light turned off." \
         || echo "  Could not turn off light (device may not be connected)."
-elif [[ -x "$APP_PATH/Contents/MacOS/slicky" ]]; then
-    "$APP_PATH/Contents/MacOS/slicky" off 2>/dev/null && echo "  Light turned off." \
+elif [[ -x "$APP_PATH/Contents/MacOS/statuslight" ]]; then
+    "$APP_PATH/Contents/MacOS/statuslight" off 2>/dev/null && echo "  Light turned off." \
         || echo "  Could not turn off light."
 else
-    echo "  No slicky binary found to turn off light."
+    echo "  No statuslight binary found to turn off light."
 fi
 
 # --- 5. Remove symlinks (requires admin) and app bundle ----------------------
 NEED_ADMIN=false
-for bin in slicky slickyd; do
+for bin in statuslight statuslightd; do
     if [[ -L "$SYMLINK_DIR/$bin" || -f "$SYMLINK_DIR/$bin" ]]; then
         NEED_ADMIN=true
         break
@@ -100,14 +100,14 @@ done
 if $NEED_ADMIN || [[ -d "$APP_PATH" ]]; then
     echo ""
     echo "Removing CLI symlinks and app bundle (requires admin)..."
-    ADMIN_SCRIPT="rm -f '$SYMLINK_DIR/slicky' '$SYMLINK_DIR/slickyd'"
+    ADMIN_SCRIPT="rm -f '$SYMLINK_DIR/statuslight' '$SYMLINK_DIR/statuslightd'"
     [[ -d "$APP_PATH" ]] && ADMIN_SCRIPT="$ADMIN_SCRIPT && rm -rf '$APP_PATH'"
     if command -v osascript &>/dev/null; then
         osascript -e "do shell script \"$ADMIN_SCRIPT\" with administrator privileges" 2>/dev/null \
             && echo "  Removed." \
-            || echo "  WARNING: Admin access denied. Remove manually:"$'\n'"    sudo rm -f $SYMLINK_DIR/slicky $SYMLINK_DIR/slickyd"$'\n'"    sudo rm -rf $APP_PATH"
+            || echo "  WARNING: Admin access denied. Remove manually:"$'\n'"    sudo rm -f $SYMLINK_DIR/statuslight $SYMLINK_DIR/statuslightd"$'\n'"    sudo rm -rf $APP_PATH"
     else
-        echo "  Run manually: sudo rm -f $SYMLINK_DIR/slicky $SYMLINK_DIR/slickyd && sudo rm -rf $APP_PATH"
+        echo "  Run manually: sudo rm -f $SYMLINK_DIR/statuslight $SYMLINK_DIR/statuslightd && sudo rm -rf $APP_PATH"
     fi
 elif [[ -d "$APP_PATH" ]]; then
     echo ""
@@ -146,4 +146,4 @@ if [[ -d "$CONFIG_DIR" ]]; then
 fi
 
 echo ""
-echo "==> OpenSlicky has been uninstalled."
+echo "==> StatusLight has been uninstalled."

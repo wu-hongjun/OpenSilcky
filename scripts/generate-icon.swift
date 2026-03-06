@@ -1,6 +1,6 @@
 #!/usr/bin/env swift
 //
-// generate-icon.swift — Create OpenSlicky.iconset PNGs programmatically.
+// generate-icon.swift — Create StatusLight.iconset PNGs programmatically.
 //
 // Usage: swift generate-icon.swift <output-iconset-dir>
 //   Then: iconutil -c icns <output-iconset-dir> -o AppIcon.icns
