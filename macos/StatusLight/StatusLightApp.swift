@@ -83,7 +83,7 @@ final class ViewModel: ObservableObject {
     private enum SavedLightState {
         case preset(String)
         case customColor(Color)
-        case animation(type: String, color: String, speed: Double)
+        case animation(type: String, color: String, color2: String?, speed: Double)
     }
 
     private var savedState: SavedLightState?
@@ -99,6 +99,7 @@ final class ViewModel: ObservableObject {
 
     @Published var deviceConnected = false
     @Published var devices: [StatusLightCLI.DeviceInfo] = []
+    @Published var hasLoadedOnce = false
     /// Device IDs that the user has toggled off (excluded from color broadcasts).
     @Published var disabledDevices: Set<String> = [] {
         didSet {
@@ -106,6 +107,7 @@ final class ViewModel: ObservableObject {
         }
     }
     @Published var slackConnected = false
+    @Published var showSlackSetup = false
     @Published var currentPreset: String? = nil
     @Published var isInstalled = false
     @Published var isInstalling = false
@@ -132,6 +134,8 @@ final class ViewModel: ObservableObject {
     @Published var isAnimating = false
     @Published var selectedAnimationType = "breathing"
     @Published var animationSpeed: Double = 1.0
+    @Published var animationColor = Color.white
+    @Published var animationColor2 = Color.blue
 
     // Intensity (brightness cap)
     @Published var intensity: Double = 1.0 {
@@ -201,7 +205,68 @@ final class ViewModel: ObservableObject {
             self.devices = devs
             self.deviceConnected = !devs.isEmpty
             self.slackConnected = slack
+            self.hasLoadedOnce = true
             self.isRefreshing = false
+
+            // Read device color in a separate task so it doesn't block UI.
+            // The CLI status command can hang if HID readback stalls.
+            if !devs.isEmpty {
+                Task { @MainActor in
+                    let status = await self.cli.getStatus()
+                    guard !Task.isCancelled else { return }
+                    self.syncUIFromDeviceStatus(status)
+                }
+            }
+        }
+    }
+
+    /// Known presets and their full-brightness RGB values.
+    private static let knownPresets: [(name: String, r: Double, g: Double, b: Double)] = [
+        ("available", 0, 1, 0),
+        ("busy", 1, 0, 0),
+        ("away", 1, 1, 0),
+        ("in-meeting", 1, 1, 1),
+    ]
+
+    /// Match a hex color against known presets, accounting for intensity scaling.
+    private func matchPreset(hex: String) -> String? {
+        guard hex.count == 7, hex.hasPrefix("#") else { return nil }
+        let r = Double(Int(hex.dropFirst(1).prefix(2), radix: 16) ?? 0)
+        let g = Double(Int(hex.dropFirst(3).prefix(2), radix: 16) ?? 0)
+        let b = Double(Int(hex.dropFirst(5).prefix(2), radix: 16) ?? 0)
+
+        let tolerance = 25.0
+        for preset in Self.knownPresets {
+            let pr = preset.r * 255.0 * intensity
+            let pg = preset.g * 255.0 * intensity
+            let pb = preset.b * 255.0 * intensity
+            if abs(r - pr) <= tolerance && abs(g - pg) <= tolerance && abs(b - pb) <= tolerance {
+                return preset.name
+            }
+        }
+        return nil
+    }
+
+    private func syncUIFromDeviceStatus(_ status: StatusLightCLI.LightStatus) {
+        guard !self.isAnimating, let hex = status.colorHex else { return }
+        let oldPreset = self.currentPreset
+
+        if hex == "#000000" {
+            self.currentPreset = nil
+            self.isCustomColorActive = false
+        } else if let preset = status.presetName ?? matchPreset(hex: hex) {
+            self.currentPreset = preset
+            self.isCustomColorActive = false
+        } else {
+            self.currentPreset = nil
+            self.isCustomColorActive = true
+        }
+
+        // If preset changed (e.g. physical button press), sync to Slack.
+        if self.autoSyncSlack && self.slackConnected && self.currentPreset != oldPreset {
+            if let preset = self.currentPreset {
+                Task { await self.syncSlackStatus(for: preset) }
+            }
         }
     }
 
@@ -269,8 +334,9 @@ final class ViewModel: ObservableObject {
     func turnOff() {
         // Save current state before turning off
         if isAnimating {
-            let colorHex = pickerColor.toHex()
-            savedState = .animation(type: selectedAnimationType, color: colorHex, speed: animationSpeed)
+            let colorHex = animationColor.toHex()
+            let color2Hex: String? = selectedAnimationType == "transition" ? animationColor2.toHex() : nil
+            savedState = .animation(type: selectedAnimationType, color: colorHex, color2: color2Hex, speed: animationSpeed)
         } else if let preset = currentPreset {
             savedState = .preset(preset)
         } else if isCustomColorActive {
@@ -298,11 +364,12 @@ final class ViewModel: ObservableObject {
         case .customColor(let color):
             pickerColor = color
             setPickerColor()
-        case .animation(let type, let color, let speed):
+        case .animation(let type, let color, let color2, let speed):
             selectedAnimationType = type
-            pickerColor = colorFromHex(color)
+            animationColor = colorFromHex(color)
+            if let c2 = color2 { animationColor2 = colorFromHex(c2) }
             animationSpeed = speed
-            startAnimation(type: type, color: color, speed: speed)
+            startAnimation(type: type, color: color, color2: color2, speed: speed)
         }
     }
 
@@ -320,11 +387,11 @@ final class ViewModel: ObservableObject {
 
     // MARK: - Animation
 
-    func startAnimation(type animType: String, color: String = "white", speed: Double = 1.0) {
+    func startAnimation(type animType: String, color: String = "white", color2: String? = nil, speed: Double = 1.0) {
         stopAnimation()
         isAnimating = true
         currentPreset = nil
-        animationProcess = cli.animate(type: animType, color: color, speed: speed, brightness: intensity)
+        animationProcess = cli.animate(type: animType, color: color, color2: color2, speed: speed, brightness: intensity)
     }
 
     func stopAnimation() {
@@ -359,13 +426,17 @@ final class ViewModel: ObservableObject {
     private func syncSlackStatus(for preset: String) async {
         switch preset.lowercased() {
         case "available":
+            let _ = await cli.slackSetPresence("auto")
             let _ = await cli.slackSetStatus(text: "Available", emoji: ":large_green_circle:")
         case "busy":
+            let _ = await cli.slackSetPresence("auto")
             let _ = await cli.slackSetStatus(text: "Focusing", emoji: ":no_entry:")
-        case "away":
-            let _ = await cli.slackSetStatus(text: "", emoji: "")
         case "in-meeting":
+            let _ = await cli.slackSetPresence("auto")
             let _ = await cli.slackSetStatus(text: "In a meeting", emoji: ":spiral_calendar_pad:")
+        case "away":
+            let _ = await cli.slackSetPresence("away")
+            let _ = await cli.slackClearStatus()
         default:
             break
         }
@@ -461,7 +532,12 @@ final class ViewModel: ObservableObject {
                 cli.writeMarker()
             }
             await MainActor.run {
-                if ok { self.isInstalled = true }
+                if ok {
+                    self.isInstalled = true
+                    self.startPolling()
+                    self.loadCustomPresets()
+                    self.startUpdateChecking()
+                }
                 self.isInstalling = false
             }
         }
@@ -599,7 +675,7 @@ struct MenuBarView: View {
         VStack(spacing: 12) {
             UpdateBannerView()
             StatusSection()
-            if vm.deviceConnected {
+            if vm.deviceConnected || !vm.hasLoadedOnce {
                 Divider()
                 LazyVGrid(columns: gridColumns, spacing: 6) {
                     ForEach(statusPresets, id: \.name) { preset in
@@ -613,50 +689,77 @@ struct MenuBarView: View {
                     }
                 }
                 Divider()
-                MenuBarSlackRow()
+                // Compact intensity slider
+                HStack(spacing: 4) {
+                    Image(systemName: "sun.min")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                    Slider(value: $vm.intensity, in: 0.05...1.0, step: 0.05)
+                        .controlSize(.mini)
+                        .onChange(of: vm.intensity) { _ in
+                            if let name = vm.currentPreset {
+                                vm.setPreset(name)
+                            } else if vm.isCustomColorActive {
+                                vm.setPickerColor()
+                            }
+                        }
+                    Image(systemName: "sun.max")
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                    Text(String(format: "%d%%", Int((vm.intensity * 100).rounded())))
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .frame(width: 30, alignment: .trailing)
+                }
             }
             Divider()
-            Text("StatusLight v\(vm.cli.appVersion)")
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            MenuBarFooterRow()
         }
         .padding(16)
     }
 }
 
-// MARK: - Menu Bar Slack Row (compact)
+// MARK: - Menu Bar Footer Row (version + Slack status)
 
-struct MenuBarSlackRow: View {
+struct MenuBarFooterRow: View {
     @EnvironmentObject var vm: ViewModel
-    @State private var showSetupWizard = false
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
+            Text("v\(vm.cli.appVersion)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+
+            Spacer()
+
             Circle()
                 .fill(vm.slackConnected ? Color.green : Color.gray)
-                .frame(width: 6, height: 6)
-            Text(vm.slackConnected ? "Slack connected" : "Slack not connected")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            Spacer()
+                .frame(width: 5, height: 5)
             if vm.slackConnected {
-                if vm.autoSyncSlack {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 9))
-                        .foregroundColor(.green)
-                        .help("Auto-sync is on")
-                }
+                Text(vm.autoSyncSlack ? "Slack synced" : "Slack")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             } else {
-                Button("Connect") {
-                    showSetupWizard = true
+                Button("Connect Slack") {
+                    vm.showSlackSetup = true
+                    openWindow(id: "main")
+                    NSApp.activate(ignoringOtherApps: true)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.mini)
+                .font(.caption2)
+                .buttonStyle(.borderless)
+                .foregroundColor(.accentColor)
             }
-        }
-        .sheet(isPresented: $showSetupWizard) {
-            SlackSetupWizard(vm: vm)
+
+            Button(action: {
+                openWindow(id: "main")
+                NSApp.activate(ignoringOtherApps: true)
+            }) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 10))
+            }
+            .buttonStyle(.borderless)
+            .foregroundColor(.secondary)
         }
     }
 }
@@ -668,7 +771,7 @@ struct FullWindowView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 16) {
                 UpdateBannerView()
                 StatusSection()
                 Divider()
@@ -772,74 +875,30 @@ struct UpdateBannerView: View {
 
 struct StatusSection: View {
     @EnvironmentObject var vm: ViewModel
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Device list
+        VStack(alignment: .leading, spacing: 6) {
             if vm.devices.isEmpty {
                 HStack(spacing: 8) {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 8, height: 8)
-                    Text("No devices detected")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    if vm.hasLoadedOnce {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 8, height: 8)
+                        Text("No devices detected")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Scanning devices…")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
             } else {
                 ForEach(vm.devices) { device in
                     DeviceRow(device: device)
                 }
-            }
-
-            // Current state + controls
-            HStack(spacing: 8) {
-                if vm.isAnimating {
-                    Image(systemName: "waveform")
-                        .font(.caption)
-                    Text("Animating")
-                        .font(.caption)
-                } else if let preset = vm.currentPreset {
-                    Circle()
-                        .fill(colorForPreset(preset))
-                        .frame(width: 8, height: 8)
-                    Text(displayName(for: preset))
-                        .font(.caption)
-                } else if vm.isCustomColorActive {
-                    Circle()
-                        .fill(vm.pickerColor)
-                        .frame(width: 8, height: 8)
-                    Text(vm.pickerColor.toHex())
-                        .font(.caption)
-                } else {
-                    Text("Off")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
-
-                Button(action: {
-                    if vm.isOn {
-                        vm.turnOff()
-                    } else {
-                        vm.turnOn()
-                    }
-                }) {
-                    Image(systemName: "power")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
-                .disabled(!vm.isOn && !vm.canTurnOn)
-
-                Button(action: {
-                    openWindow(id: "main")
-                    NSApp.activate(ignoringOtherApps: true)
-                }) {
-                    Image(systemName: "gearshape")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
             }
         }
     }
@@ -855,29 +914,26 @@ struct DeviceRow: View {
         !vm.disabledDevices.contains(device.id)
     }
 
-    var body: some View {
+var body: some View {
         HStack(spacing: 8) {
             Circle()
                 .fill(isEnabled ? Color.green : Color.gray)
                 .frame(width: 8, height: 8)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(device.name)
-                    .font(.caption)
-                    .foregroundColor(isEnabled ? .primary : .secondary)
-                if let serial = device.serial {
-                    Text(serial)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-            }
+            Text(device.name)
+                .font(.caption)
+                .foregroundColor(isEnabled ? .primary : .secondary)
+                .help(device.serial.map { "Serial: \($0)" } ?? "")
             Spacer()
             Toggle("", isOn: Binding(
-                get: { isEnabled },
-                set: { _ in vm.toggleDevice(device) }
+                get: { vm.isOn },
+                set: { newValue in
+                    if newValue { vm.turnOn() } else { vm.turnOff() }
+                }
             ))
             .toggleStyle(.switch)
             .controlSize(.mini)
             .labelsHidden()
+            .disabled(!vm.isOn && !vm.canTurnOn)
         }
     }
 }
@@ -1031,7 +1087,7 @@ struct IntensitySection: View {
                 Image(systemName: "sun.max")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Text(String(format: "%d%%", Int(vm.intensity * 100)))
+                Text(String(format: "%d%%", Int((vm.intensity * 100).rounded())))
                     .font(.system(.caption, design: .monospaced))
                     .foregroundColor(.secondary)
                     .frame(width: 40, alignment: .trailing)
@@ -1107,10 +1163,10 @@ struct AnimationSection: View {
                     .tint(.red)
                 } else {
                     Button(action: {
-                        let colorHex = vm.pickerColor.toHex()
                         vm.startAnimation(
                             type: vm.selectedAnimationType,
-                            color: colorHex,
+                            color: vm.animationColor.toHex(),
+                            color2: vm.selectedAnimationType == "transition" ? vm.animationColor2.toHex() : nil,
                             speed: vm.animationSpeed
                         )
                     }) {
@@ -1121,6 +1177,19 @@ struct AnimationSection: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
+                }
+            }
+
+            // Color pickers inline
+            HStack(spacing: 12) {
+                ColorPicker("Color", selection: $vm.animationColor, supportsOpacity: false)
+                    .font(.caption)
+                    .frame(maxWidth: 140)
+
+                if vm.selectedAnimationType == "transition" {
+                    ColorPicker("Color 2", selection: $vm.animationColor2, supportsOpacity: false)
+                        .font(.caption)
+                        .frame(maxWidth: 140)
                 }
             }
 
@@ -1142,7 +1211,6 @@ struct AnimationSection: View {
 
 struct SlackSection: View {
     @EnvironmentObject var vm: ViewModel
-    @State private var showSetupWizard = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1168,7 +1236,7 @@ struct SlackSection: View {
                     .controlSize(.mini)
                 } else {
                     Button("Connect Slack") {
-                        showSetupWizard = true
+                        vm.showSlackSetup = true
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.mini)
@@ -1191,7 +1259,7 @@ struct SlackSection: View {
                     .help("When enabled, setting a status preset also updates your Slack status")
             }
         }
-        .sheet(isPresented: $showSetupWizard) {
+        .sheet(isPresented: $vm.showSlackSetup) {
             SlackSetupWizard(vm: vm)
         }
     }
@@ -1604,13 +1672,6 @@ func colorForPreset(_ name: String) -> Color {
     case "purple": return Color(red: 0.5, green: 0, blue: 0.5)
     case "in-meeting": return Color(red: 1, green: 1, blue: 1)
     default: return Color.gray
-    }
-}
-
-func displayName(for preset: String) -> String {
-    switch preset.lowercased() {
-    case "in-meeting": return "In Meeting"
-    default: return preset.capitalized
     }
 }
 

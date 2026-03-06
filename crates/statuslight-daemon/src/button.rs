@@ -109,7 +109,7 @@ pub async fn stop_button_poll(state: &AppState) {
     }
 }
 
-/// Map a preset name to a Slack status emoji and text, then update the profile.
+/// Map a preset name to a Slack status emoji/text and presence, then update both.
 async fn sync_slack_status(state: &AppState, preset_name: &str) {
     let slack = state.inner.slack.lock().await;
     let user_token = match slack.user_token.clone() {
@@ -118,14 +118,43 @@ async fn sync_slack_status(state: &AppState, preset_name: &str) {
     };
     drop(slack);
 
-    let (emoji, text) = match preset_name {
-        "in-meeting" => (":spiral_calendar_pad:", "In a meeting"),
-        "busy" => (":no_entry:", "Focusing"),
-        "available" => (":large_green_circle:", "Available"),
-        "away" | "off" => ("", ""),
+    let client = state.inner.http_client.clone();
+
+    // Determine presence and status for this preset.
+    let (presence, emoji, text) = match preset_name {
+        "in-meeting" => ("auto", ":spiral_calendar_pad:", "In a meeting"),
+        "busy" => ("auto", ":no_entry:", "Focusing"),
+        "available" => ("auto", ":large_green_circle:", "Available"),
+        "away" => ("away", "", ""),
+        "off" => ("away", "", ""),
         _ => return,
     };
 
+    // Set presence (online/away).
+    let presence_body = format!("presence={presence}");
+    match client
+        .post("https://slack.com/api/users.setPresence")
+        .bearer_auth(&user_token)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(presence_body)
+        .send()
+        .await
+    {
+        Ok(resp) => match resp.json::<serde_json::Value>().await {
+            Ok(json) => {
+                if json["ok"].as_bool() != Some(true) {
+                    log::warn!(
+                        "Slack presence sync failed: {}",
+                        json["error"].as_str().unwrap_or("unknown")
+                    );
+                }
+            }
+            Err(e) => log::warn!("Slack presence sync: failed to parse response: {e}"),
+        },
+        Err(e) => log::warn!("Slack presence sync request failed: {e}"),
+    }
+
+    // Set status emoji/text.
     let body = serde_json::json!({
         "profile": {
             "status_text": text,
@@ -134,7 +163,6 @@ async fn sync_slack_status(state: &AppState, preset_name: &str) {
         }
     });
 
-    let client = state.inner.http_client.clone();
     match client
         .post("https://slack.com/api/users.profile.set")
         .bearer_auth(&user_token)

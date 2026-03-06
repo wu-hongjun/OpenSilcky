@@ -104,34 +104,61 @@ final class StatusLightCLI {
         var devices: [DeviceInfo] = []
         var driver: String?
         var serial: String?
-        var product: String?
+        var displayName: String?
         var index = 0
         for line in output.split(separator: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("Device ") {
                 // Flush previous device.
                 if let d = driver {
-                    let name = product ?? d
+                    let name = displayName ?? d
                     let id = serial ?? "device-\(index)"
                     devices.append(DeviceInfo(id: id, name: name, driver: d, serial: serial))
                     index += 1
                 }
-                driver = nil; serial = nil; product = nil
+                driver = nil; serial = nil; displayName = nil
+            } else if trimmed.hasPrefix("Name:") {
+                displayName = String(trimmed.dropFirst("Name:".count)).trimmingCharacters(in: .whitespaces)
             } else if trimmed.hasPrefix("Driver:") {
                 driver = String(trimmed.dropFirst("Driver:".count)).trimmingCharacters(in: .whitespaces)
             } else if trimmed.hasPrefix("Serial:") {
                 serial = String(trimmed.dropFirst("Serial:".count)).trimmingCharacters(in: .whitespaces)
-            } else if trimmed.hasPrefix("Product:") {
-                product = String(trimmed.dropFirst("Product:".count)).trimmingCharacters(in: .whitespaces)
             }
         }
         // Flush last device.
         if let d = driver {
-            let name = product ?? d
+            let name = displayName ?? d
             let id = serial ?? "device-\(index)"
             devices.append(DeviceInfo(id: id, name: name, driver: d, serial: serial))
         }
         return devices
+    }
+
+    /// Parsed light status from `statuslight status`.
+    struct LightStatus {
+        let colorHex: String?   // e.g. "#00FF00"
+        let presetName: String? // e.g. "available"
+    }
+
+    /// Query current device color/status via `statuslight status`.
+    func getStatus() async -> LightStatus {
+        let (output, ok) = await run(["status"])
+        guard ok else { return LightStatus(colorHex: nil, presetName: nil) }
+        var colorHex: String?
+        var presetName: String?
+        for line in output.split(separator: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("Color:") {
+                let value = String(trimmed.dropFirst("Color:".count)).trimmingCharacters(in: .whitespaces)
+                // Extract hex from e.g. "#00FF00 (from device)"
+                if let hex = value.split(separator: " ").first, hex.hasPrefix("#") {
+                    colorHex = String(hex)
+                }
+            } else if trimmed.hasPrefix("Status:") {
+                presetName = String(trimmed.dropFirst("Status:".count)).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return LightStatus(colorHex: colorHex, presetName: presetName)
     }
 
     // MARK: - Slack
@@ -171,6 +198,12 @@ final class StatusLightCLI {
     /// Clear Slack status.
     func slackClearStatus() async -> Bool {
         let (_, ok) = await run(["slack", "clear-status"])
+        return ok
+    }
+
+    /// Set Slack presence to "auto" (online) or "away".
+    func slackSetPresence(_ presence: String) async -> Bool {
+        let (_, ok) = await run(["slack", "set-presence", presence])
         return ok
     }
 

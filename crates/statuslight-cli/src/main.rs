@@ -99,9 +99,6 @@ enum AnimateAction {
         /// Speed multiplier (default: 1.0)
         #[arg(long, default_value = "1.0")]
         speed: f64,
-        /// Brightness cap (0.0–1.0, default: 1.0)
-        #[arg(long, default_value = "1.0")]
-        brightness: f64,
     },
     /// Hard on/off blink
     Flash {
@@ -111,9 +108,6 @@ enum AnimateAction {
         /// Speed multiplier (default: 1.0)
         #[arg(long, default_value = "1.0")]
         speed: f64,
-        /// Brightness cap (0.0–1.0, default: 1.0)
-        #[arg(long, default_value = "1.0")]
-        brightness: f64,
     },
     /// Morse code SOS pattern
     Sos {
@@ -123,9 +117,6 @@ enum AnimateAction {
         /// Speed multiplier (default: 1.0)
         #[arg(long, default_value = "1.0")]
         speed: f64,
-        /// Brightness cap (0.0–1.0, default: 1.0)
-        #[arg(long, default_value = "1.0")]
-        brightness: f64,
     },
     /// Sharp rise then exponential decay
     Pulse {
@@ -135,9 +126,6 @@ enum AnimateAction {
         /// Speed multiplier (default: 1.0)
         #[arg(long, default_value = "1.0")]
         speed: f64,
-        /// Brightness cap (0.0–1.0, default: 1.0)
-        #[arg(long, default_value = "1.0")]
-        brightness: f64,
     },
     /// Cycle through the full hue spectrum (or cycle through specified colors)
     Rainbow {
@@ -147,9 +135,6 @@ enum AnimateAction {
         /// Speed multiplier (default: 1.0)
         #[arg(long, default_value = "1.0")]
         speed: f64,
-        /// Brightness cap (0.0–1.0, default: 1.0)
-        #[arg(long, default_value = "1.0")]
-        brightness: f64,
     },
     /// Smooth transition between colors
     Transition {
@@ -162,9 +147,6 @@ enum AnimateAction {
         /// Speed multiplier (default: 1.0)
         #[arg(long, default_value = "1.0")]
         speed: f64,
-        /// Brightness cap (0.0–1.0, default: 1.0)
-        #[arg(long, default_value = "1.0")]
-        brightness: f64,
     },
 }
 
@@ -254,6 +236,11 @@ enum SlackAction {
     },
     /// Clear your Slack status
     ClearStatus,
+    /// Set your Slack presence (auto or away)
+    SetPresence {
+        /// Presence: "auto" (online) or "away"
+        presence: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -390,6 +377,7 @@ fn main() -> Result<()> {
             } else {
                 for (i, (driver_id, d)) in devices.iter().enumerate() {
                     println!("Device {}:", i + 1);
+                    println!("  Name:         {}", d.display_name());
                     println!("  Driver:       {driver_id}");
                     if let Some(ref s) = d.serial {
                         println!("  Serial:       {s}");
@@ -425,75 +413,38 @@ fn main() -> Result<()> {
             println!("{} devices across {} drivers", total, all.len());
         }
         Commands::Animate { action } => {
-            let (anim_type, colors, speed, brightness) = match action {
-                AnimateAction::Breathing {
-                    color,
-                    speed,
-                    brightness,
-                } => (
-                    AnimationType::Breathing,
-                    parse_colors(&color)?,
-                    speed,
-                    brightness,
-                ),
-                AnimateAction::Flash {
-                    color,
-                    speed,
-                    brightness,
-                } => (
-                    AnimationType::Flash,
-                    parse_colors(&color)?,
-                    speed,
-                    brightness,
-                ),
-                AnimateAction::Sos {
-                    color,
-                    speed,
-                    brightness,
-                } => (AnimationType::Sos, parse_colors(&color)?, speed, brightness),
-                AnimateAction::Pulse {
-                    color,
-                    speed,
-                    brightness,
-                } => (
-                    AnimationType::Pulse,
-                    parse_colors(&color)?,
-                    speed,
-                    brightness,
-                ),
-                AnimateAction::Rainbow {
-                    color,
-                    speed,
-                    brightness,
-                } => (
-                    AnimationType::Rainbow,
-                    parse_colors(&color)?,
-                    speed,
-                    brightness,
-                ),
+            let (anim_type, colors, speed) = match action {
+                AnimateAction::Breathing { color, speed } => {
+                    (AnimationType::Breathing, parse_colors(&color)?, speed)
+                }
+                AnimateAction::Flash { color, speed } => {
+                    (AnimationType::Flash, parse_colors(&color)?, speed)
+                }
+                AnimateAction::Sos { color, speed } => {
+                    (AnimationType::Sos, parse_colors(&color)?, speed)
+                }
+                AnimateAction::Pulse { color, speed } => {
+                    (AnimationType::Pulse, parse_colors(&color)?, speed)
+                }
+                AnimateAction::Rainbow { color, speed } => {
+                    (AnimationType::Rainbow, parse_colors(&color)?, speed)
+                }
                 AnimateAction::Transition {
                     mut color,
                     color2,
                     speed,
-                    brightness,
                 } => {
-                    // Backward compat: append --color2 to the list
                     if let Some(c2) = color2 {
                         color.push(c2);
                     }
-                    (
-                        AnimationType::Transition,
-                        parse_colors(&color)?,
-                        speed,
-                        brightness,
-                    )
+                    (AnimationType::Transition, parse_colors(&color)?, speed)
                 }
             };
             animate::run(
                 anim_type,
                 &colors,
                 speed,
-                brightness,
+                brightness_factor,
                 cli.all,
                 cli.device.as_deref(),
             )?;
@@ -550,6 +501,7 @@ fn main() -> Result<()> {
             SlackAction::Status => slack::status()?,
             SlackAction::SetStatus { text, emoji } => slack::set_status(&text, &emoji)?,
             SlackAction::ClearStatus => slack::clear_status()?,
+            SlackAction::SetPresence { presence } => slack::set_presence(&presence)?,
         },
         Commands::Startup { action } => match action {
             StartupAction::Enable => startup::enable()?,

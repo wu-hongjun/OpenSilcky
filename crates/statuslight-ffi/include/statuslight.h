@@ -68,7 +68,7 @@ int32_t statuslight_device_count(void);
 /**
  * Read the current color from the device.
  *
- * Returns 0 on success, -11 if readback is not supported, other negative codes on error.
+ * Returns 0 on success, -9 if readback is not supported, other negative codes on error.
  *
  * # Safety
  *

@@ -64,6 +64,29 @@ pub struct DeviceInfo {
     pub driver_id: String,
 }
 
+impl DeviceInfo {
+    /// A user-friendly display name for the device.
+    ///
+    /// Strips firmware version suffixes (e.g. "Slicky-1.0" → "Slicky")
+    /// and falls back to the driver ID if no product string is available.
+    pub fn display_name(&self) -> String {
+        match &self.product {
+            Some(p) => {
+                // Strip trailing version like "-1.0", "-2.1.3"
+                if let Some(idx) = p.rfind('-') {
+                    let suffix = &p[idx + 1..];
+                    if !suffix.is_empty() && suffix.chars().all(|c| c.is_ascii_digit() || c == '.')
+                    {
+                        return p[..idx].to_string();
+                    }
+                }
+                p.clone()
+            }
+            None => self.driver_id.clone(),
+        }
+    }
+}
+
 /// Real HID-backed Slicky device.
 pub struct HidSlickyDevice {
     device: hidapi::HidDevice,

@@ -77,12 +77,23 @@ pub const BUTTON_CYCLE_COLORS: &[(Color, &str)] = &[
     (Color { r: 0, g: 0, b: 0 }, "off"),
 ];
 
-/// Look up the preset name for a button-cycle color, if it matches exactly.
+/// Look up the preset name for a button-cycle color.
+///
+/// Uses approximate matching (tolerance of 20 per channel) because HID
+/// readback may not return the exact color that was written.
 pub fn button_cycle_preset(color: Color) -> Option<&'static str> {
     BUTTON_CYCLE_COLORS
         .iter()
-        .find(|(c, _)| *c == color)
+        .find(|(c, _)| color_approx_eq(*c, color, 20))
         .map(|(_, name)| *name)
+}
+
+/// Check if two colors are approximately equal within a per-channel tolerance.
+fn color_approx_eq(a: Color, b: Color, tolerance: u8) -> bool {
+    let dr = (a.r as i16 - b.r as i16).unsigned_abs() as u8;
+    let dg = (a.g as i16 - b.g as i16).unsigned_abs() as u8;
+    let db = (a.b as i16 - b.b as i16).unsigned_abs() as u8;
+    dr <= tolerance && dg <= tolerance && db <= tolerance
 }
 
 /// Build the 65-byte HID output report for setting a color.

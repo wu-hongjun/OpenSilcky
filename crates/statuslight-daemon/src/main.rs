@@ -55,7 +55,10 @@ async fn main() -> Result<()> {
         Ok(()) => log::debug!("Removed stale socket: {}", args.socket.display()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => {
-            anyhow::bail!("failed to remove stale socket {}: {e}", args.socket.display());
+            anyhow::bail!(
+                "failed to remove stale socket {}: {e}",
+                args.socket.display()
+            );
         }
     }
 

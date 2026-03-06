@@ -30,6 +30,7 @@ fn manifest_json() -> String {
                     "users.profile:read",
                     "users.profile:write",
                     "users:read",
+                    "users:write",
                     "im:read",
                     "im:history"
                 ],
@@ -341,6 +342,37 @@ pub fn set_status(text: &str, emoji: &str) -> Result<()> {
 /// `statuslight slackclear-status` — clear Slack status.
 pub fn clear_status() -> Result<()> {
     set_status("", "")
+}
+
+/// `statuslight slack set-presence` — set Slack presence to "auto" (online) or "away".
+pub fn set_presence(presence: &str) -> Result<()> {
+    let config = Config::load()?;
+    let token = config.slack.user_token.ok_or_else(|| {
+        anyhow::anyhow!("not connected to Slack — run `statuslight slack setup` first")
+    })?;
+
+    let p = match presence {
+        "auto" | "online" => "auto",
+        "away" => "away",
+        _ => bail!("presence must be 'auto' (online) or 'away'"),
+    };
+
+    let resp = ureq::post("https://slack.com/api/users.setPresence")
+        .header("Authorization", &format!("Bearer {token}"))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .send(format!("presence={p}").as_bytes())
+        .context("failed to set Slack presence")?;
+
+    let json: serde_json::Value = serde_json::from_reader(resp.into_body().into_reader())
+        .context("failed to parse Slack response")?;
+
+    if !json["ok"].as_bool().unwrap_or(false) {
+        let err = json["error"].as_str().unwrap_or("unknown error");
+        bail!("Slack API error: {err}");
+    }
+
+    println!("Slack presence set to: {p}");
+    Ok(())
 }
 
 /// Prompt the user for input, returning the trimmed value.

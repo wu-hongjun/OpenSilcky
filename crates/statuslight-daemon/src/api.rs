@@ -396,42 +396,73 @@ async fn get_device_color(
     State(state): State<AppState>,
     Query(query): Query<DeviceQuery>,
 ) -> Result<Json<DeviceColorResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let mut devices_guard = state.inner.devices.lock().await;
+    // Use try_lock to avoid blocking if button-poll or another task holds the
+    // device lock (HID is single-threaded per handle, so concurrent access hangs).
+    let devices_guard = match state.inner.devices.try_lock() {
+        Ok(guard) => guard,
+        Err(_) => {
+            // Lock is held (likely by button poll doing HID I/O).
+            // Fall back to the daemon's tracked current_color.
+            let current = *state.inner.current_color.lock().await;
+            return Ok(Json(DeviceColorResponse {
+                device_color: current.map(ColorResponse::from),
+                supports_readback: true,
+            }));
+        }
+    };
 
-    // Reconnect if no devices are held.
     if devices_guard.is_empty() {
         drop(devices_guard);
         let dev = tokio::task::spawn_blocking(|| DeviceRegistry::with_builtins().open_any())
             .await
             .map_err(|_| map_error(StatusLightError::DeviceNotFound))?
             .map_err(map_error)?;
-        devices_guard = state.inner.devices.lock().await;
-        // Re-check after re-acquiring lock (another request may have reconnected).
+        let mut devices_guard = state.inner.devices.lock().await;
         if devices_guard.is_empty() {
             devices_guard.push(dev);
         }
-    }
+        // Find the target device.
+        let idx = if let Some(ref serial) = query.device {
+            devices_guard
+                .iter()
+                .position(|d| d.serial() == Some(serial.as_str()))
+                .ok_or_else(|| map_error(StatusLightError::DeviceNotFound))?
+        } else {
+            0
+        };
 
-    // Find the target device.
-    let idx = if let Some(ref serial) = query.device {
-        devices_guard
-            .iter()
-            .position(|d| d.serial() == Some(serial.as_str()))
-            .ok_or_else(|| map_error(StatusLightError::DeviceNotFound))?
+        match devices_guard[idx].get_color() {
+            None => Ok(Json(DeviceColorResponse {
+                device_color: None,
+                supports_readback: false,
+            })),
+            Some(Ok(color)) => Ok(Json(DeviceColorResponse {
+                device_color: Some(color.into()),
+                supports_readback: true,
+            })),
+            Some(Err(e)) => Err(map_error(e)),
+        }
     } else {
-        0
-    };
+        let idx = if let Some(ref serial) = query.device {
+            devices_guard
+                .iter()
+                .position(|d| d.serial() == Some(serial.as_str()))
+                .ok_or_else(|| map_error(StatusLightError::DeviceNotFound))?
+        } else {
+            0
+        };
 
-    match devices_guard[idx].get_color() {
-        None => Ok(Json(DeviceColorResponse {
-            device_color: None,
-            supports_readback: false,
-        })),
-        Some(Ok(color)) => Ok(Json(DeviceColorResponse {
-            device_color: Some(color.into()),
-            supports_readback: true,
-        })),
-        Some(Err(e)) => Err(map_error(e)),
+        match devices_guard[idx].get_color() {
+            None => Ok(Json(DeviceColorResponse {
+                device_color: None,
+                supports_readback: false,
+            })),
+            Some(Ok(color)) => Ok(Json(DeviceColorResponse {
+                device_color: Some(color.into()),
+                supports_readback: true,
+            })),
+            Some(Err(e)) => Err(map_error(e)),
+        }
     }
 }
 
