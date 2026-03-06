@@ -53,8 +53,8 @@ pub async fn start_socket_mode(state: &AppState) {
     };
     let state_clone = state.clone();
 
+    let client = state.inner.http_client.clone();
     let handle = tokio::spawn(async move {
-        let client = reqwest::Client::new();
         let mut backoff = Duration::from_secs(1);
         let max_backoff = Duration::from_secs(60);
 
@@ -420,9 +420,9 @@ pub async fn start_emoji_poll(state: &AppState) {
     drop(slack);
 
     let state_clone = state.clone();
+    let client = state.inner.http_client.clone();
 
     let handle = tokio::spawn(async move {
-        let client = reqwest::Client::new();
         loop {
             // Skip if an event animation is playing or manual override is set.
             let skip = state_clone
@@ -562,8 +562,9 @@ pub async fn resolve_user_id(state: &AppState) -> Option<String> {
         slack.user_token.clone()?
     };
 
-    let client = reqwest::Client::new();
-    let resp: serde_json::Value = match client
+    let resp: serde_json::Value = match state
+        .inner
+        .http_client
         .post("https://slack.com/api/auth.test")
         .bearer_auth(&token)
         .header("Content-Type", "application/x-www-form-urlencoded")

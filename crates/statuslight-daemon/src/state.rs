@@ -34,6 +34,8 @@ pub struct AppStateInner {
     pub(crate) manual_override: AtomicBool,
     /// Whether the Socket Mode WebSocket is currently connected.
     pub(crate) socket_mode_connected: AtomicBool,
+    /// Shared HTTP client for all outbound requests (Slack API, etc.).
+    pub(crate) http_client: reqwest::Client,
 }
 
 /// Slack configuration and runtime state.
@@ -81,6 +83,7 @@ impl AppState {
                 event_animation_handle: Mutex::new(None),
                 manual_override: AtomicBool::new(false),
                 socket_mode_connected: AtomicBool::new(false),
+                http_client: reqwest::Client::new(),
             }),
         }
     }

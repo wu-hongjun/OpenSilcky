@@ -377,7 +377,7 @@ async fn post_slack_configure(
     Json(req): Json<SlackConfigureRequest>,
 ) -> Result<Json<SlackConfigureResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Validate tokens before storing.
-    let client = reqwest::Client::new();
+    let client = state.inner.http_client.clone();
     if let Some(ref token) = req.user_token {
         let resp: serde_json::Value = client
             .post("https://slack.com/api/auth.test")
