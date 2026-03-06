@@ -180,6 +180,38 @@ final class StatusLightCLI {
         return runOsascriptAdmin(script)
     }
 
+    /// Restart the daemon by killing it and letting the LaunchAgent respawn it.
+    /// If there's no LaunchAgent, launches the daemon directly from the bundle.
+    func restartDaemon() {
+        let killall = Process()
+        killall.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
+        killall.arguments = ["statuslightd"]
+        killall.standardOutput = FileHandle.nullDevice
+        killall.standardError = FileHandle.nullDevice
+        try? killall.run()
+        killall.waitUntilExit()
+
+        // Wait for it to exit, then check if LaunchAgent will respawn it.
+        Thread.sleep(forTimeInterval: 1.0)
+
+        let check = Process()
+        check.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        check.arguments = ["-x", "statuslightd"]
+        check.standardOutput = FileHandle.nullDevice
+        check.standardError = FileHandle.nullDevice
+        try? check.run()
+        check.waitUntilExit()
+        if check.terminationStatus != 0 {
+            // LaunchAgent didn't respawn it — start it manually.
+            let macosDir = Bundle.main.executableURL!.deletingLastPathComponent()
+            let daemon = Process()
+            daemon.executableURL = macosDir.appendingPathComponent("statuslightd")
+            daemon.standardOutput = FileHandle.nullDevice
+            daemon.standardError = FileHandle.nullDevice
+            try? daemon.run()
+        }
+    }
+
     /// Unload LaunchAgent and kill slickyd daemon. Waits for confirmed exit.
     func stopDaemon() {
         // Unload LaunchAgent

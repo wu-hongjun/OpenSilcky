@@ -1279,7 +1279,7 @@ struct SlackSetupWizard: View {
                             .foregroundColor(.green)
                         Text("Slack Connected!")
                             .font(.title3.bold())
-                        Text("Restart the daemon to enable Socket Mode events.")
+                        Text("Socket Mode events are now active.")
                             .font(.callout)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -1367,6 +1367,10 @@ struct SlackSetupWizard: View {
                 botToken: botToken,
                 userToken: userToken
             )
+            if ok {
+                // Restart daemon so it picks up the new tokens and starts Socket Mode.
+                vm.cli.restartDaemon()
+            }
             await MainActor.run {
                 isConnecting = false
                 if ok {
