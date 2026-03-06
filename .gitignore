@@ -15,5 +15,8 @@
 # Build artifacts
 *.dmg
 
+# References
+references/busylight/
+
 # Environment
 .env
