@@ -34,6 +34,10 @@ pub enum StatusLightError {
     /// The requested preset was not found.
     #[error("preset not found: {0}")]
     PresetNotFound(String),
+
+    /// The specified driver was not found in the registry.
+    #[error("unknown driver: {0}")]
+    UnknownDriver(String),
 }
 
 /// A type alias for `Result<T, StatusLightError>`.

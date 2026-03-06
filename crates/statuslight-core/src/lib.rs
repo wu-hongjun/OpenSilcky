@@ -16,7 +16,7 @@ pub mod registry;
 
 pub use animation::AnimationType;
 pub use color::{Color, Preset};
-pub use config::{Config, CustomPreset, SlackRule};
+pub use config::{Config, CustomPreset, DaemonConfig, SlackRule};
 pub use device::{DeviceInfo, HidSlickyDevice, StatusLightDevice};
 pub use driver::DeviceDriver;
 pub use error::{Result, StatusLightError};

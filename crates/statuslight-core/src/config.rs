@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// Top-level configuration.
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub slack: SlackConfig,
@@ -24,6 +24,53 @@ pub struct Config {
     /// User-created custom presets.
     #[serde(default)]
     pub custom_presets: Vec<CustomPreset>,
+    /// Global brightness level (0–100, default 100).
+    #[serde(default = "default_brightness")]
+    pub brightness: u8,
+    /// Daemon-specific settings.
+    #[serde(default)]
+    pub daemon: DaemonConfig,
+}
+
+fn default_brightness() -> u8 {
+    100
+}
+
+/// Daemon-specific configuration.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DaemonConfig {
+    /// Optional TCP port for the HTTP API (disabled by default).
+    pub tcp_port: Option<u16>,
+    /// TCP bind address (default "127.0.0.1").
+    #[serde(default = "default_tcp_bind")]
+    pub tcp_bind: String,
+}
+
+fn default_tcp_bind() -> String {
+    "127.0.0.1".to_string()
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            slack: SlackConfig::default(),
+            startup: StartupConfig::default(),
+            updates: UpdateConfig::default(),
+            colors: HashMap::new(),
+            custom_presets: Vec::new(),
+            brightness: default_brightness(),
+            daemon: DaemonConfig::default(),
+        }
+    }
+}
+
+impl Default for DaemonConfig {
+    fn default() -> Self {
+        Self {
+            tcp_port: None,
+            tcp_bind: default_tcp_bind(),
+        }
+    }
 }
 
 /// A user-defined preset with optional animation.
@@ -553,6 +600,53 @@ speed = 1.5
         );
 
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn default_brightness_is_100() {
+        let config = Config::default();
+        assert_eq!(config.brightness, 100);
+    }
+
+    #[test]
+    fn brightness_round_trip() {
+        let dir = std::env::temp_dir().join("statuslight-test-brightness");
+        let path = dir.join("config.toml");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let mut config = Config::default();
+        config.brightness = 75;
+        config.save_to(&path).expect("save failed");
+        let loaded = Config::load_from(&path).expect("load failed");
+        assert_eq!(loaded.brightness, 75);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn deserialize_brightness_from_toml() {
+        let toml_str = "brightness = 50\n";
+        let config: Config = toml::from_str(toml_str).expect("parse failed");
+        assert_eq!(config.brightness, 50);
+    }
+
+    #[test]
+    fn daemon_config_defaults() {
+        let config = Config::default();
+        assert!(config.daemon.tcp_port.is_none());
+        assert_eq!(config.daemon.tcp_bind, "127.0.0.1");
+    }
+
+    #[test]
+    fn deserialize_daemon_config() {
+        let toml_str = r#"
+[daemon]
+tcp_port = 8080
+tcp_bind = "0.0.0.0"
+"#;
+        let config: Config = toml::from_str(toml_str).expect("parse failed");
+        assert_eq!(config.daemon.tcp_port, Some(8080));
+        assert_eq!(config.daemon.tcp_bind, "0.0.0.0");
     }
 
     #[test]

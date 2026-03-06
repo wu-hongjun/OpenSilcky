@@ -84,6 +84,9 @@ struct DeviceEntry {
     serial: Option<String>,
     manufacturer: Option<String>,
     product: Option<String>,
+    vid: String,
+    pid: String,
+    driver: String,
 }
 
 #[derive(Serialize)]
@@ -124,7 +127,9 @@ struct SlackEnableResponse {
 
 fn map_error(e: StatusLightError) -> (StatusCode, Json<ErrorResponse>) {
     let status = match &e {
-        StatusLightError::DeviceNotFound => StatusCode::SERVICE_UNAVAILABLE,
+        StatusLightError::DeviceNotFound | StatusLightError::UnknownDriver(_) => {
+            StatusCode::SERVICE_UNAVAILABLE
+        }
         StatusLightError::MultipleDevices { .. } => StatusCode::SERVICE_UNAVAILABLE,
         StatusLightError::InvalidHexColor(_)
         | StatusLightError::UnknownPreset(_)
@@ -267,14 +272,16 @@ async fn get_presets() -> impl IntoResponse {
 async fn get_devices() -> Result<Json<Vec<DeviceEntry>>, (StatusCode, Json<ErrorResponse>)> {
     let registry = DeviceRegistry::with_builtins();
     let all = registry.enumerate_all();
-    let devices: Vec<_> = all.into_iter().map(|(_, info)| info).collect();
-    let entries: Vec<DeviceEntry> = devices
+    let entries: Vec<DeviceEntry> = all
         .into_iter()
-        .map(|d| DeviceEntry {
+        .map(|(_, d)| DeviceEntry {
             path: d.path,
             serial: d.serial,
             manufacturer: d.manufacturer,
             product: d.product,
+            vid: format!("0x{:04x}", d.vid),
+            pid: format!("0x{:04x}", d.pid),
+            driver: d.driver_id,
         })
         .collect();
     Ok(Json(entries))

@@ -79,7 +79,7 @@ impl DeviceRegistry {
             .drivers
             .iter()
             .find(|d| d.id() == driver_id)
-            .ok_or(StatusLightError::DeviceNotFound)?;
+            .ok_or_else(|| StatusLightError::UnknownDriver(driver_id.to_string()))?;
         match serial {
             Some(s) => driver.open_serial(s),
             None => driver.open(),
