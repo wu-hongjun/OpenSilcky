@@ -153,6 +153,21 @@ impl Default for UpdateConfig {
     }
 }
 
+/// Recursively copy a directory and its contents.
+fn copy_dir_recursive(src: &std::path::Path, dst: &PathBuf) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let dest_path = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_recursive(&entry.path(), &dest_path)?;
+        } else {
+            fs::copy(entry.path(), &dest_path)?;
+        }
+    }
+    Ok(())
+}
+
 impl Config {
     /// Returns `~/.config/statuslight/config.toml`.
     pub fn path() -> Option<PathBuf> {
@@ -160,8 +175,30 @@ impl Config {
     }
 
     /// Load config from disk, returning `Default` if the file doesn't exist.
+    ///
+    /// Auto-migrates from the old `~/.config/openslicky/` directory if it exists
+    /// and the new `~/.config/statuslight/` directory does not.
     pub fn load() -> anyhow::Result<Self> {
         let path = Self::path().ok_or_else(|| anyhow::anyhow!("cannot determine config dir"))?;
+
+        // Auto-migrate from old config location.
+        if let Some(new_dir) = path.parent() {
+            if let Some(config_root) = dirs::config_dir() {
+                let old_dir = config_root.join("openslicky");
+                if old_dir.exists() && !new_dir.exists() {
+                    if fs::rename(&old_dir, new_dir).is_err() {
+                        // Cross-device fallback: copy recursively.
+                        let _ = copy_dir_recursive(&old_dir, &new_dir.to_path_buf());
+                    }
+                    eprintln!(
+                        "Migrated config from {} to {}",
+                        old_dir.display(),
+                        new_dir.display()
+                    );
+                }
+            }
+        }
+
         Self::load_from(&path)
     }
 
@@ -479,6 +516,28 @@ speed = 1.5
         assert_eq!(loaded.custom_presets[0].speed, 2.0);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn copy_dir_recursive_copies_files() {
+        let base = std::env::temp_dir().join("statuslight-test-copy-dir");
+        let _ = std::fs::remove_dir_all(&base);
+        let src = base.join("src");
+        let dst = base.join("dst");
+
+        // Create source with a file.
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("config.toml"), "test = true").unwrap();
+
+        super::copy_dir_recursive(&src, &dst).unwrap();
+
+        assert!(dst.join("config.toml").exists());
+        assert_eq!(
+            std::fs::read_to_string(dst.join("config.toml")).unwrap(),
+            "test = true"
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
