@@ -50,10 +50,13 @@ async fn main() -> Result<()> {
         );
     }
 
-    // Remove stale socket file if it exists.
-    if args.socket.exists() {
-        std::fs::remove_file(&args.socket)
-            .with_context(|| format!("failed to remove stale socket: {}", args.socket.display()))?;
+    // Remove stale socket file (ignore if not found).
+    match std::fs::remove_file(&args.socket) {
+        Ok(()) => log::debug!("Removed stale socket: {}", args.socket.display()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            anyhow::bail!("failed to remove stale socket {}: {e}", args.socket.display());
+        }
     }
 
     let state = AppState::new();
