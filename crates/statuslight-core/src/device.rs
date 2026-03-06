@@ -36,6 +36,13 @@ pub trait StatusLightDevice: Send {
     fn off(&self) -> Result<()> {
         self.set_color(Color::off())
     }
+
+    /// Read the current color from the device, if supported.
+    ///
+    /// Returns `None` if the driver does not support color readback.
+    fn get_color(&self) -> Option<Result<Color>> {
+        None
+    }
 }
 
 /// Info about a connected device (from enumeration).
@@ -95,6 +102,24 @@ impl HidSlickyDevice {
     }
 }
 
+impl HidSlickyDevice {
+    /// Read the current color from the device via CMD 0x0B.
+    fn read_color(&self) -> Result<Color> {
+        let request = protocol::build_get_color_request();
+        self.device.write(&request)?;
+
+        let mut buf = [0u8; protocol::REPORT_SIZE];
+        let n = self
+            .device
+            .read_timeout(&mut buf, protocol::READ_TIMEOUT_MS)?;
+        if n == 0 {
+            return Err(StatusLightError::ReadTimeout);
+        }
+
+        protocol::parse_get_color_response(&buf[..n]).ok_or(StatusLightError::UnexpectedResponse)
+    }
+}
+
 impl StatusLightDevice for HidSlickyDevice {
     fn driver_name(&self) -> &str {
         "Slicky"
@@ -115,5 +140,9 @@ impl StatusLightDevice for HidSlickyDevice {
         }
         log::debug!("Set color to {color}");
         Ok(())
+    }
+
+    fn get_color(&self) -> Option<Result<Color>> {
+        Some(self.read_color())
     }
 }
