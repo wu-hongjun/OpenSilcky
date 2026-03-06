@@ -587,14 +587,12 @@ struct MenuBarView: View {
     @EnvironmentObject var vm: ViewModel
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             UpdateBannerView()
             StatusSection()
             if vm.deviceConnected {
                 Divider()
-                ColorGridSection()
-                Divider()
-                IntensitySection()
+                MenuBarSlackRow()
             }
             Divider()
             Text("StatusLight v\(vm.cli.appVersion)")
@@ -603,6 +601,42 @@ struct MenuBarView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(16)
+    }
+}
+
+// MARK: - Menu Bar Slack Row (compact)
+
+struct MenuBarSlackRow: View {
+    @EnvironmentObject var vm: ViewModel
+    @State private var showSetupWizard = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(vm.slackConnected ? Color.green : Color.gray)
+                .frame(width: 6, height: 6)
+            Text(vm.slackConnected ? "Slack connected" : "Slack not connected")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Spacer()
+            if vm.slackConnected {
+                if vm.autoSyncSlack {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 9))
+                        .foregroundColor(.green)
+                        .help("Auto-sync is on")
+                }
+            } else {
+                Button("Connect") {
+                    showSetupWizard = true
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.mini)
+            }
+        }
+        .sheet(isPresented: $showSetupWizard) {
+            SlackSetupWizard(vm: vm)
+        }
     }
 }
 
