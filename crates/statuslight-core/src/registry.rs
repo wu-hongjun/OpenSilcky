@@ -22,6 +22,11 @@ impl DeviceRegistry {
     pub fn with_builtins() -> Self {
         let mut reg = Self::new();
         reg.register(Box::new(crate::drivers::SlickyDriver));
+        reg.register(Box::new(crate::drivers::LuxaforDriver));
+        reg.register(Box::new(crate::drivers::Blink1Driver));
+        reg.register(Box::new(crate::drivers::BlinkStickDriver));
+        reg.register(Box::new(crate::drivers::EmbravaDriver));
+        reg.register(Box::new(crate::drivers::KuandoDriver));
         reg
     }
 
