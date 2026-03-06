@@ -2,6 +2,9 @@
 
 Open-source driver and tools for the [Lexcelon Slicky](https://www.lexcelon.com/products/slicky) USB status light.
 
+<img width="344" height="299" alt="Screenshot 2026-03-06 at 5 48 46 PM" src="https://github.com/user-attachments/assets/8e5818f4-c13c-4060-8a2e-4a478505465a" />
+
+
 The Slicky is a USB-connected desk light that communicates your availability via color — red for busy, green for available, and any custom color you choose. Lexcelon stopped maintaining the original driver, so we built an open-source replacement in Rust.
 
 > It turns out that very few people are using the software on mac and we don't have the capacity at the moment to maintain the program. We have plans to re-vamp the whole thing with more modern software but I'm unable to promise any sort of timeline on that at the moment. (Lexcelon Representive, June 2024)
