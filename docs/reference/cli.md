@@ -1,55 +1,55 @@
 # CLI Reference
 
-**Binary:** `slicky`
+**Binary:** `statuslight`
 
 ```
-slicky <COMMAND>
+statuslight <COMMAND>
 ```
 
 ## Commands
 
-### `slicky set <NAME>`
+### `statuslight set <NAME>`
 
 Set the light to a named preset.
 
 ```bash
-slicky set red
-slicky set available
-slicky set in-meeting    # hyphens allowed
-slicky set InMeeting     # PascalCase also works
+statuslight set red
+statuslight set available
+statuslight set in-meeting    # hyphens allowed
+statuslight set InMeeting     # PascalCase also works
 ```
 
 **Output:** `Set to red (#FF0000)`
 
-### `slicky rgb <R> <G> <B>`
+### `statuslight rgb <R> <G> <B>`
 
 Set the light to exact RGB values (0–255 each).
 
 ```bash
-slicky rgb 255 128 0
+statuslight rgb 255 128 0
 ```
 
 **Output:** `Set to RGB(255, 128, 0) #FF8000`
 
-### `slicky hex <COLOR>`
+### `statuslight hex <COLOR>`
 
 Set the light to a hex color.
 
 ```bash
-slicky hex "#FF8000"
-slicky hex FF8000
-slicky hex f80           # 3-char shorthand
+statuslight hex "#FF8000"
+statuslight hex FF8000
+statuslight hex f80           # 3-char shorthand
 ```
 
 **Output:** `Set to #FF8000`
 
-### `slicky off`
+### `statuslight off`
 
 Turn the light off.
 
 **Output:** `Light off`
 
-### `slicky presets`
+### `statuslight presets`
 
 List all available presets with their hex colors.
 
@@ -71,7 +71,7 @@ away           #FFFF00
 in-meeting     #FF4500
 ```
 
-### `slicky devices`
+### `statuslight devices`
 
 List connected Slicky devices.
 

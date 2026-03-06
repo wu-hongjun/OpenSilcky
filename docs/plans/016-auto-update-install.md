@@ -19,23 +19,23 @@ to config.toml              `update install` downloads   "Install Update" button
                             DMG, mounts, copies .app     "Restart" after install
 ```
 
-The app never hits GitHub directly — it reads the daemon's cached result via `slicky update status` (local-only, no network). When the user clicks "Install Update", it calls `slicky update install` which downloads the DMG, mounts it, replaces `/Applications/OpenSlicky.app`, and restarts the daemon.
+The app never hits GitHub directly — it reads the daemon's cached result via `statuslight update status` (local-only, no network). When the user clicks "Install Update", it calls `statuslight update install` which downloads the DMG, mounts it, replaces `/Applications/StatusLight.app`, and restarts the daemon.
 
 ## Files Modified
 
 | File | Change |
 |------|--------|
-| `crates/slicky-cli/Cargo.toml` | Added `serde` dependency |
-| `crates/slicky-cli/src/main.rs` | Added `Status`, `Install` to `UpdateAction` + dispatch |
-| `crates/slicky-cli/src/update.rs` | Added `status()`, `install()`, helpers, JSON structs, tests |
-| `macos/OpenSlicky/SlickyCLI.swift` | Added `updateStatus()`, `installUpdate()`, `installUpdateAdmin()` |
-| `macos/OpenSlicky/OpenSlickyApp.swift` | Added Codable structs, ViewModel update state/methods, `UpdateBannerView`, integrated into both layouts |
+| `crates/statuslight-cli/Cargo.toml` | Added `serde` dependency |
+| `crates/statuslight-cli/src/main.rs` | Added `Status`, `Install` to `UpdateAction` + dispatch |
+| `crates/statuslight-cli/src/update.rs` | Added `status()`, `install()`, helpers, JSON structs, tests |
+| `macos/StatusLight/StatusLightCLI.swift` | Added `updateStatus()`, `installUpdate()`, `installUpdateAdmin()` |
+| `macos/StatusLight/StatusLightApp.swift` | Added Codable structs, ViewModel update state/methods, `UpdateBannerView`, integrated into both layouts |
 
 ## Key Design Decisions
 
 - **No new API calls from the app** — relies on daemon's cached check (GitHub rate-limit safe)
 - **Admin fallback** — tries normal file ops first, escalates via `osascript` admin prompt only if needed
-- **Symlinks preserved** — replacing `.app` bundle doesn't break `/usr/local/bin/slicky` symlinks
+- **Symlinks preserved** — replacing `.app` bundle doesn't break `/usr/local/bin/statuslight` symlinks
 - **Daemon auto-restart** — `launchctl stop` + LaunchAgent `KeepAlive = true` picks up new binary
 - **DMG integrity verified** — hdiutil checksums enabled (no `-noverify` flag)
 - **Mount point validated** — must start with `/Volumes/` to prevent path traversal

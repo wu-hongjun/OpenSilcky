@@ -13,10 +13,10 @@ The current SwiftUI app puts everything in a single `MenuBarExtra` popup — sta
 ### SwiftUI: Two Scene Types
 
 ```
-OpenSlickyApp
+StatusLightApp
 ├── MenuBarExtra (always present)
 │   └── MenuBarView  — compact, essentials only
-└── Window("OpenSlicky", id: "main")  — full GUI
+└── Window("StatusLight", id: "main")  — full GUI
     └── FullWindowView  — all features
 ```
 
@@ -39,16 +39,16 @@ OpenSlickyApp
 │ [Cyn] [Blu] [Pur] [Mag]         │  ← 9 color presets
 │ [Wht]                            │
 │──────────────────────────────────│
-│ [🔲 Open OpenSlicky...]          │  ← open full window (if dock mode)
+│ [🔲 Open StatusLight...]          │  ← open full window (if dock mode)
 │──────────────────────────────────│
-│ OpenSlicky v0.1.0                │  ← minimal footer
+│ StatusLight v0.1.0                │  ← minimal footer
 └──────────────────────────────────┘
 ```
 
 ### Full GUI Window
 
 ```
-┌─ OpenSlicky ──────────────────────────────────────┐
+┌─ StatusLight ──────────────────────────────────────┐
 │ ● Device connected              Off [⏻]           │
 │───────────────────────────────────────────────────│
 │ STATUS                                            │
@@ -76,7 +76,7 @@ OpenSlickyApp
 │ SETTINGS                                          │
 │ Show in Dock                                      │
 │───────────────────────────────────────────────────│
-│ OpenSlicky v0.1.0               [Uninstall]       │
+│ StatusLight v0.1.0               [Uninstall]       │
 └───────────────────────────────────────────────────┘
 ```
 
@@ -85,17 +85,17 @@ OpenSlickyApp
 Two new commands to fill gaps:
 
 ```bash
-slicky status          # Device connected? Current color? Slack status?
-slicky config show     # Dump full config.toml to stdout
+statuslight status          # Device connected? Current color? Slack status?
+statuslight config show     # Dump full config.toml to stdout
 ```
 
 ## Files Modified
 
 | File | Changes |
 |------|---------|
-| `macos/OpenSlicky/OpenSlickyApp.swift` | Split into MenuBarView + FullWindowView; move On/Off to StatusSection; add Window scene; add "Open OpenSlicky..." button |
-| `crates/slicky-cli/src/main.rs` | Add `Status` and `Config Show` commands |
-| `crates/slicky-cli/Cargo.toml` | Add `toml` dependency for config serialization |
+| `macos/StatusLight/StatusLightApp.swift` | Split into MenuBarView + FullWindowView; move On/Off to StatusSection; add Window scene; add "Open StatusLight..." button |
+| `crates/statuslight-cli/src/main.rs` | Add `Status` and `Config Show` commands |
+| `crates/statuslight-cli/Cargo.toml` | Add `toml` dependency for config serialization |
 
 ## Implementation Order
 
@@ -106,9 +106,9 @@ slicky config show     # Dump full config.toml to stdout
 
 1. `cargo test --workspace` — all tests pass
 2. `cargo clippy --workspace -- -D warnings` — no warnings
-3. `slicky status` — shows device/slack/config summary
-4. `slicky config show` — dumps config TOML
-5. Menu bar popup shows only: status+on/off, status presets, color presets, "Open OpenSlicky...", version
+3. `statuslight status` — shows device/slack/config summary
+4. `statuslight config show` — dumps config TOML
+5. Menu bar popup shows only: status+on/off, status presets, color presets, "Open StatusLight...", version
 6. With "Show in Dock" enabled: dock icon appears, clicking it opens the full GUI window
 7. Full window shows all sections: custom presets, color picker, animations, Slack, settings, uninstall
 8. On/Off button in status bar turns off light and stops any animation

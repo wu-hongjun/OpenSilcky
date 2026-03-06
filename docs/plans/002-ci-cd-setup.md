@@ -2,7 +2,7 @@
 
 ## Context
 
-OpenSlicky has a working Rust workspace with 4 crates (core, cli, daemon, ffi) but no CI/CD. We need to:
+StatusLight has a working Rust workspace with 4 crates (core, cli, daemon, ffi) but no CI/CD. We need to:
 1. Fix `.gitignore` to track `Cargo.lock` (required for reproducible binary builds)
 2. Add a CI workflow that runs on every PR/push
 3. Add a release workflow that builds binaries for macOS + Linux when a tag is pushed
@@ -48,7 +48,7 @@ Per-target steps:
 2. Install Rust stable + target (`dtolnay/rust-toolchain`)
 3. Install platform system deps
 4. `cargo build --workspace --release --target $TARGET`
-5. Package binaries (`slicky`, `slickyd`) + FFI lib + header into `openslicky-$TAG-$TARGET.tar.gz`
+5. Package binaries (`statuslight`, `statuslightd`) + FFI lib + header into `statuslight-$TAG-$TARGET.tar.gz`
 6. Upload artifact
 
 **Final job** (`release`, `needs: build`):

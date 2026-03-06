@@ -1,4 +1,4 @@
-# Plan 007 — Native SwiftUI GUI for OpenSlicky.app
+# Plan 007 — Native SwiftUI GUI for StatusLight.app
 
 ## Context
 
@@ -6,16 +6,16 @@ The current `.app` uses a bash launcher that shows osascript dialogs ("already i
 
 ## Approach
 
-Replace the bash launcher script with a **compiled SwiftUI app** (two `.swift` files, compiled with `swiftc`). The SwiftUI app communicates with the bundled `slicky` CLI binary via `Process` (subprocess calls) — no FFI linking needed.
+Replace the bash launcher script with a **compiled SwiftUI app** (two `.swift` files, compiled with `swiftc`). The SwiftUI app communicates with the bundled `statuslight` CLI binary via `Process` (subprocess calls) — no FFI linking needed.
 
 ## App Bundle Structure (unchanged)
 
 ```
-OpenSlicky.app/Contents/
+StatusLight.app/Contents/
   MacOS/
-    OpenSlicky       ← compiled SwiftUI binary (replaces bash script)
-    slicky           (CLI binary)
-    slickyd          (daemon binary)
+    StatusLight       ← compiled SwiftUI binary (replaces bash script)
+    statuslight      (CLI binary)
+    statuslightd          (daemon binary)
   Info.plist         (LSUIElement changed to false)
   PkgInfo
 ```
@@ -35,14 +35,14 @@ App Launch
 
 ## CLI Communication
 
-The SwiftUI app calls the bundled `slicky` binary via `Process`:
-- `slicky set <preset>` — set color
-- `slicky off` — turn off
-- `slicky slack login` — opens browser for OAuth (async, non-blocking)
-- `slicky slack logout` — disconnect
-- `slicky slack status` — parse "logged in" / "not logged in"
-- `slicky startup enable/disable` — manage LaunchAgent
-- `slicky devices` — check device connectivity
+The SwiftUI app calls the bundled `statuslight` binary via `Process`:
+- `statuslight set <preset>` — set color
+- `statuslight off` — turn off
+- `statuslight slack login` — opens browser for OAuth (async, non-blocking)
+- `statuslight slack logout` — disconnect
+- `statuslight slack status` — parse "logged in" / "not logged in"
+- `statuslight startup enable/disable` — manage LaunchAgent
+- `statuslight devices` — check device connectivity
 
 Admin operations (symlinks) use `osascript "do shell script ... with administrator privileges"`.
 
@@ -52,8 +52,8 @@ Status refreshes every 5 seconds via a timer.
 
 | File | Action |
 |------|--------|
-| `macos/OpenSlicky/SlickyCLI.swift` | **Created** — async `Process` wrapper around CLI binary |
-| `macos/OpenSlicky/OpenSlickyApp.swift` | **Created** — SwiftUI app with all views and ViewModel |
+| `macos/StatusLight/StatusLightCLI.swift` | **Created** — async `Process` wrapper around CLI binary |
+| `macos/StatusLight/StatusLightApp.swift` | **Created** — SwiftUI app with all views and ViewModel |
 | `macos/Info.plist.template` | **Modified** — changed `LSUIElement` from `true` to `false` |
 | `scripts/build-app.sh` | **Modified** — replaced bash heredoc with `swiftc` compilation |
 | `docs/plans/007-swiftui-gui.md` | **Created** — this plan |
@@ -65,9 +65,9 @@ In `build-app.sh`, the launcher heredoc was replaced with:
 swiftc \
   -target arm64-apple-macosx13.0 \
   -O \
-  -o "$MACOS_DIR/OpenSlicky" \
-  "$REPO_ROOT/macos/OpenSlicky/OpenSlickyApp.swift" \
-  "$REPO_ROOT/macos/OpenSlicky/SlickyCLI.swift" \
+  -o "$MACOS_DIR/StatusLight" \
+  "$REPO_ROOT/macos/StatusLight/StatusLightApp.swift" \
+  "$REPO_ROOT/macos/StatusLight/StatusLightCLI.swift" \
   -framework SwiftUI \
   -framework AppKit \
   -parse-as-library

@@ -7,8 +7,8 @@
 3. Clone and build:
 
 ```bash
-git clone https://github.com/openslicky/openslicky.git
-cd openslicky
+git clone https://github.com/wu-hongjun/StatusLight.git
+cd StatusLight
 cargo build --workspace
 cargo test --workspace
 ```
@@ -28,20 +28,20 @@ Run both before every commit.
 
 | Crate | Strategy |
 |-------|----------|
-| `slicky-core` | `thiserror` enum, `Result<T, SlickyError>` |
-| `slicky-cli` | `anyhow::Result` with `.context()` |
-| `slicky-daemon` | `anyhow` internally, map to HTTP status + JSON errors |
-| `slicky-ffi` | Integer error codes, `catch_unwind` around everything |
+| `statuslight-core` | `thiserror` enum, `Result<T, StatusLightError>` |
+| `statuslight-cli` | `anyhow::Result` with `.context()` |
+| `statuslight-daemon` | `anyhow` internally, map to HTTP status + JSON errors |
+| `statuslight-ffi` | Integer error codes, `catch_unwind` around everything |
 
-**Never** use `.unwrap()` or `.expect()` in library code (`slicky-core`).
+**Never** use `.unwrap()` or `.expect()` in library code (`statuslight-core`).
 
 ### Naming
 
-- Crates: `slicky-*` (kebab-case)
+- Crates: `statuslight-*` (kebab-case)
 - Types: `PascalCase`
 - Functions: `snake_case`
 - Constants: `SCREAMING_SNAKE_CASE`
-- FFI exports: `slicky_` prefix
+- FFI exports: `statuslight_` prefix
 
 ### Documentation
 

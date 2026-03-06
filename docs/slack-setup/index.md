@@ -1,10 +1,10 @@
 # Slack Setup
 
-Connect OpenSlicky to Slack for real-time DM notifications and automatic status light sync.
+Connect StatusLight to Slack for real-time DM notifications and automatic status light sync.
 
 ## Overview
 
-OpenSlicky uses a **per-user Slack app** model. You create your own Slack app from a provided manifest, then paste three tokens into the CLI or macOS app. This keeps your credentials private — no shared OAuth app, no secrets in the binary.
+StatusLight uses a **per-user Slack app** model. You create your own Slack app from a provided manifest, then paste three tokens into the CLI or macOS app. This keeps your credentials private — no shared OAuth app, no secrets in the binary.
 
 > **Using the macOS app?** Click **Connect Slack** in the Slack section for an in-app wizard that guides you through each step.
 
@@ -13,7 +13,7 @@ OpenSlicky uses a **per-user Slack app** model. You create your own Slack app fr
 ### Step 1: Run Setup
 
 ```bash
-slicky slack setup
+statuslight slack setup
 ```
 
 The manifest JSON is copied to your clipboard and the Slack app creation page opens. Click **From a manifest**, pick your workspace, switch to the **JSON** tab, paste (**Cmd+V**), and click **Create**.
@@ -39,23 +39,23 @@ The wizard validates each token against the Slack API before saving.
 
 ```bash
 # If using LaunchAgent (recommended):
-launchctl stop com.openslicky.daemon
+launchctl stop com.statuslight.daemon
 # The LaunchAgent will auto-restart it.
 
 # Or manually:
-killall slickyd
-slickyd &
+killall statuslightd
+statuslightd &
 ```
 
 Check that Socket Mode connected:
 
 ```bash
-slicky slack status
+statuslight slack status
 ```
 
 ## Configuration
 
-After setup, your `~/.config/openslicky/config.toml` will contain:
+After setup, your `~/.config/statuslight/config.toml` will contain:
 
 ```toml
 [slack]
@@ -107,7 +107,7 @@ Rules are matched in order — first match wins.
 ## Disconnect
 
 ```bash
-slicky slack disconnect
+statuslight slack disconnect
 ```
 
 This removes all three tokens and disables events. Restart the daemon afterward.

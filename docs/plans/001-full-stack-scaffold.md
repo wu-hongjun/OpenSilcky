@@ -1,4 +1,4 @@
-# OpenSlicky — Full Stack Scaffold Plan
+# StatusLight — Full Stack Scaffold Plan
 
 ## Context
 
@@ -19,20 +19,20 @@ We reverse-engineered the Lexcelon Slicky-1.0 USB status light's HID protocol (V
 - No `#[allow(clippy::...)]` without a comment explaining why
 
 ### Error Handling
-- **`slicky-core`**: Define a crate-specific `SlickyError` enum using `thiserror`. All public functions return `Result<T, SlickyError>`. Expose a type alias `pub type Result<T> = std::result::Result<T, SlickyError>;`
-- **`slicky-cli`**: Use `anyhow::Result` at the binary level. Convert `SlickyError` to user-friendly messages via `.context()`.
-- **`slicky-daemon`**: Use `anyhow::Result` internally. Map errors to appropriate HTTP status codes (400 for bad input, 503 for device not found, 500 for unexpected errors). Always return JSON error bodies: `{"error": "message"}`.
-- **`slicky-ffi`**: Never panic across the FFI boundary. Catch all errors and return integer codes. Use `std::panic::catch_unwind` around any function that could panic.
-- **Never use `.unwrap()` or `.expect()` in library code** (`slicky-core`). Binary crates may use `.expect()` only during startup initialization where failure is unrecoverable.
+- **`statuslight-core`**: Define a crate-specific `StatusLightError` enum using `thiserror`. All public functions return `Result<T, StatusLightError>`. Expose a type alias `pub type Result<T> = std::result::Result<T, StatusLightError>;`
+- **`statuslight-cli`**: Use `anyhow::Result` at the binary level. Convert `StatusLightError` to user-friendly messages via `.context()`.
+- **`statuslight-daemon`**: Use `anyhow::Result` internally. Map errors to appropriate HTTP status codes (400 for bad input, 503 for device not found, 500 for unexpected errors). Always return JSON error bodies: `{"error": "message"}`.
+- **`statuslight-ffi`**: Never panic across the FFI boundary. Catch all errors and return integer codes. Use `std::panic::catch_unwind` around any function that could panic.
+- **Never use `.unwrap()` or `.expect()` in library code** (`statuslight-core`). Binary crates may use `.expect()` only during startup initialization where failure is unrecoverable.
 
 ### Naming Conventions
-- **Crates**: `slicky-*` (kebab-case)
+- **Crates**: `statuslight-*` (kebab-case)
 - **Modules**: `snake_case` (Rust default)
-- **Types**: `PascalCase` — e.g., `Color`, `SlickyDevice`, `HidSlickyDevice`
+- **Types**: `PascalCase` — e.g., `Color`, `StatusLightDevice`, `HidSlickyDevice`
 - **Functions**: `snake_case` — e.g., `set_color`, `from_hex`, `build_set_color_report`
 - **Constants**: `SCREAMING_SNAKE_CASE` — e.g., `VENDOR_ID`, `BUFFER_SIZE`
-- **FFI exports**: `slicky_` prefix on all `extern "C"` functions — e.g., `slicky_set_rgb`
-- **Enum variants**: `PascalCase` — e.g., `Preset::InMeeting`, `SlickyError::DeviceNotFound`
+- **FFI exports**: `statuslight_` prefix on all `extern "C"` functions — e.g., `statuslight_set_rgb`
+- **Enum variants**: `PascalCase` — e.g., `Preset::InMeeting`, `StatusLightError::DeviceNotFound`
 
 ### Documentation
 - All public types and functions must have a `///` doc comment
@@ -43,7 +43,7 @@ We reverse-engineered the Lexcelon Slicky-1.0 USB status light's HID protocol (V
 ### Testing
 - Unit tests go in the same file as the code under test, in a `#[cfg(test)] mod tests {}` block
 - Integration tests (if needed) go in `crates/<crate>/tests/`
-- Test all public API surfaces in `slicky-core`:
+- Test all public API surfaces in `statuslight-core`:
   - `color.rs`: hex parsing (valid 6-char, valid 3-char, with/without `#`, invalid strings, edge cases like "000000" and "FFFFFF")
   - `color.rs`: preset lookup (all names, case insensitivity, hyphenated names, unknown names)
   - `protocol.rs`: report building (verify exact byte positions for R/G/B, verify off report is all zeros in color bytes)
@@ -55,7 +55,7 @@ We reverse-engineered the Lexcelon Slicky-1.0 USB status light's HID protocol (V
 - Pin workspace dependencies in root `Cargo.toml` under `[workspace.dependencies]`
 - Crate `Cargo.toml` files reference workspace deps: `hidapi.workspace = true`
 - Minimize dependency count. Prefer std library solutions where reasonable.
-- No `unsafe` code except in `slicky-ffi` (where it's required for FFI). All `unsafe` blocks must have a `// SAFETY:` comment.
+- No `unsafe` code except in `statuslight-ffi` (where it's required for FFI). All `unsafe` blocks must have a `// SAFETY:` comment.
 
 ### Git & Commits
 - Conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`
@@ -75,38 +75,38 @@ strip = true
 ## Repository Structure
 
 ```
-OpenSilcky/
+StatusLight/
 ├── Cargo.toml                    # Workspace root
 ├── .gitignore
 ├── README.md
 ├── docs/
 │   └── plans/                    # Implementation plans
 ├── crates/
-│   ├── slicky-core/              # Core library
+│   ├── statuslight-core/         # Core library
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── lib.rs            # pub mod declarations, crate-level docs
-│   │       ├── error.rs          # SlickyError enum (thiserror), Result alias
+│   │       ├── error.rs          # StatusLightError enum (thiserror), Result alias
 │   │       ├── color.rs          # Color struct, Preset enum, hex parsing
 │   │       ├── protocol.rs       # Wire constants, build_set_color_report()
-│   │       └── device.rs         # SlickyDevice trait, HidSlickyDevice impl
-│   ├── slicky-cli/               # CLI binary ("slicky")
+│   │       └── device.rs         # StatusLightDevice trait, HidSlickyDevice impl
+│   ├── statuslight-cli/          # CLI binary ("statuslight")
 │   │   ├── Cargo.toml
 │   │   └── src/main.rs           # clap derive, command dispatch
-│   ├── slicky-daemon/            # HTTP daemon ("slickyd")
+│   ├── statuslight-daemon/       # HTTP daemon ("statuslightd")
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       ├── main.rs           # tokio entry, Unix socket bind, graceful shutdown
 │   │       ├── api.rs            # axum Router, route handlers, request/response types
 │   │       ├── state.rs          # AppState (Mutex-wrapped device + Slack state)
 │   │       └── slack.rs          # Slack API polling, emoji-to-color mapping
-│   └── slicky-ffi/               # C FFI for Swift GUI
+│   └── statuslight-ffi/          # C FFI for Swift GUI
 │       ├── Cargo.toml            # crate-type = ["cdylib", "staticlib"]
 │       ├── cbindgen.toml         # C header generation config
-│       ├── build.rs              # Runs cbindgen to produce slicky.h
+│       ├── build.rs              # Runs cbindgen to produce statuslight.h
 │       └── src/lib.rs            # extern "C" functions with panic catching
 └── macos/                        # Swift/SwiftUI app (future phase, not in this scaffold)
-    └── OpenSlicky/
+    └── StatusLight/
 ```
 
 ---
@@ -114,14 +114,14 @@ OpenSilcky/
 ## Dependency Graph
 
 ```
-slicky-core  ←─── slicky-cli      (binary: "slicky")
-             ←─── slicky-daemon   (binary: "slickyd")
-             ←─── slicky-ffi      (staticlib + cdylib: "libslicky_ffi")
+statuslight-core  ←─── statuslight-cli      (binary: "statuslight")
+                  ←─── statuslight-daemon   (binary: "statuslightd")
+                  ←─── statuslight-ffi      (staticlib + cdylib: "libstatuslight_ffi")
                         ↑
                    Swift GUI (links via C bridging header — future phase)
 ```
 
-No circular dependencies. `slicky-core` has zero internal workspace dependencies.
+No circular dependencies. `statuslight-core` has zero internal workspace dependencies.
 
 ---
 
@@ -155,20 +155,20 @@ reqwest = { version = "0.12", features = ["json"] }
 
 | Crate | Runtime deps | Build deps |
 |-------|-------------|------------|
-| `slicky-core` | `hidapi`, `thiserror`, `serde`, `serde_json`, `log` | — |
-| `slicky-cli` | `slicky-core`, `clap`, `anyhow`, `env_logger`, `log` | — |
-| `slicky-daemon` | `slicky-core`, `axum`, `tokio`, `hyper-util`, `tower`, `reqwest`, `serde`, `serde_json`, `anyhow`, `env_logger`, `log`, `clap` | — |
-| `slicky-ffi` | `slicky-core`, `log`, `env_logger` | `cbindgen = "0.27"` |
+| `statuslight-core` | `hidapi`, `thiserror`, `serde`, `serde_json`, `log` | — |
+| `statuslight-cli` | `statuslight-core`, `clap`, `anyhow`, `env_logger`, `log` | — |
+| `statuslight-daemon` | `statuslight-core`, `axum`, `tokio`, `hyper-util`, `tower`, `reqwest`, `serde`, `serde_json`, `anyhow`, `env_logger`, `log`, `clap` | — |
+| `statuslight-ffi` | `statuslight-core`, `log`, `env_logger` | `cbindgen = "0.27"` |
 
 ---
 
 ## Detailed Type & Function Specifications
 
-### `slicky-core/src/error.rs`
+### `statuslight-core/src/error.rs`
 
 ```rust
 #[derive(Debug, thiserror::Error)]
-pub enum SlickyError {
+pub enum StatusLightError {
     #[error("no Slicky device found (VID=0x04D8, PID=0xEC24)")]
     DeviceNotFound,
 
@@ -188,10 +188,10 @@ pub enum SlickyError {
     WriteMismatch { expected: usize, actual: usize },
 }
 
-pub type Result<T> = std::result::Result<T, SlickyError>;
+pub type Result<T> = std::result::Result<T, StatusLightError>;
 ```
 
-### `slicky-core/src/color.rs`
+### `statuslight-core/src/color.rs`
 
 ```rust
 /// An RGB color with each channel 0-255.
@@ -239,7 +239,7 @@ impl Preset {
 | Away | 255 | 255 | 0 | #FFFF00 |
 | InMeeting | 255 | 69 | 0 | #FF4500 |
 
-### `slicky-core/src/protocol.rs`
+### `statuslight-core/src/protocol.rs`
 
 ```rust
 pub const VENDOR_ID: u16 = 0x04D8;
@@ -274,11 +274,11 @@ Value: 0x00  0x0A  0x04  0x00  0x00  0x00  BLUE  GRN   RED   0x00...
        ID
 ```
 
-### `slicky-core/src/device.rs`
+### `statuslight-core/src/device.rs`
 
 ```rust
 /// Trait for controlling a Slicky device. Enables mocking in tests.
-pub trait SlickyDevice {
+pub trait StatusLightDevice {
     fn set_color(&self, color: Color) -> Result<()>;
     fn off(&self) -> Result<()> { self.set_color(Color::off()) }
 }
@@ -292,7 +292,7 @@ impl HidSlickyDevice {
     pub fn enumerate() -> Result<Vec<DeviceInfo>>;     // list all connected devices
 }
 
-impl SlickyDevice for HidSlickyDevice { ... }
+impl StatusLightDevice for HidSlickyDevice { ... }
 
 /// Info about a connected device (from enumeration).
 #[derive(Debug, Clone)]
@@ -308,13 +308,13 @@ pub struct DeviceInfo {
 
 ---
 
-### `slicky-cli/src/main.rs`
+### `statuslight-cli/src/main.rs`
 
-**Binary name:** `slicky`
+**Binary name:** `statuslight`
 
 ```rust
 #[derive(Parser)]
-#[command(name = "slicky", version, about = "Control your Slicky USB status light")]
+#[command(name = "statuslight", version, about = "Control your Slicky USB status light")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -341,26 +341,26 @@ enum Commands {
 
 **Examples:**
 ```
-$ slicky set red
+$ statuslight set red
 Set to red (#FF0000)
 
-$ slicky rgb 255 128 0
+$ statuslight rgb 255 128 0
 Set to RGB(255, 128, 0) #FF8000
 
-$ slicky hex "#FF8000"
+$ statuslight hex "#FF8000"
 Set to #FF8000
 
-$ slicky off
+$ statuslight off
 Light off
 
-$ slicky presets
+$ statuslight presets
 NAME           COLOR
 ----------------------------
 red            #FF0000
 green          #00FF00
 ...
 
-$ slicky devices
+$ statuslight devices
 Device 1:
   Serial:       77971799
   Manufacturer: Lexcelon
@@ -369,7 +369,7 @@ Device 1:
 
 ---
 
-### `slicky-daemon/src/api.rs` — Full API Specification
+### `statuslight-daemon/src/api.rs` — Full API Specification
 
 **All requests/responses are JSON. Content-Type: application/json.**
 
@@ -495,7 +495,7 @@ Stop polling. No request body.
 
 ---
 
-### `slicky-daemon/src/state.rs`
+### `statuslight-daemon/src/state.rs`
 
 ```rust
 #[derive(Clone)]
@@ -522,7 +522,7 @@ pub struct SlackState {
 
 ---
 
-### `slicky-daemon/src/slack.rs`
+### `statuslight-daemon/src/slack.rs`
 
 ```rust
 /// Fetch the user's Slack profile and extract status emoji.
@@ -555,7 +555,7 @@ pub fn default_emoji_map() -> HashMap<String, Color>;
 
 ---
 
-### `slicky-ffi/src/lib.rs`
+### `statuslight-ffi/src/lib.rs`
 
 ```rust
 /// All FFI functions return i32:
@@ -568,25 +568,25 @@ pub fn default_emoji_map() -> HashMap<String, Color>;
 ///  -6  = write failed
 
 #[no_mangle]
-pub extern "C" fn slicky_init();
+pub extern "C" fn statuslight_init();
     // Initialize logging. Safe to call multiple times.
 
 #[no_mangle]
-pub extern "C" fn slicky_set_rgb(r: u8, g: u8, b: u8) -> i32;
+pub extern "C" fn statuslight_set_rgb(r: u8, g: u8, b: u8) -> i32;
 
 #[no_mangle]
-pub extern "C" fn slicky_set_hex(hex: *const c_char) -> i32;
+pub extern "C" fn statuslight_set_hex(hex: *const c_char) -> i32;
     // SAFETY: caller must pass a valid null-terminated UTF-8 C string
 
 #[no_mangle]
-pub extern "C" fn slicky_set_preset(name: *const c_char) -> i32;
+pub extern "C" fn statuslight_set_preset(name: *const c_char) -> i32;
     // SAFETY: caller must pass a valid null-terminated UTF-8 C string
 
 #[no_mangle]
-pub extern "C" fn slicky_off() -> i32;
+pub extern "C" fn statuslight_off() -> i32;
 
 #[no_mangle]
-pub extern "C" fn slicky_is_connected() -> i32;
+pub extern "C" fn statuslight_is_connected() -> i32;
     // Returns 1 if connected, 0 if not. Never returns error codes.
 ```
 
@@ -600,7 +600,7 @@ pub extern "C" fn slicky_is_connected() -> i32;
 **cbindgen.toml:**
 ```toml
 language = "C"
-include_guard = "SLICKY_FFI_H"
+include_guard = "STATUSLIGHT_FFI_H"
 header = "/* Generated by cbindgen — do not edit manually */"
 ```
 
@@ -614,58 +614,58 @@ Create all files and directories. Every crate should have a minimal compilable s
 **Files to create:**
 - `/Cargo.toml` — workspace root
 - `/.gitignore` — Rust defaults + macOS + IDE
-- `/crates/slicky-core/Cargo.toml`
-- `/crates/slicky-core/src/lib.rs` — `pub mod` declarations
-- `/crates/slicky-core/src/error.rs` — empty placeholder
-- `/crates/slicky-core/src/color.rs` — empty placeholder
-- `/crates/slicky-core/src/protocol.rs` — empty placeholder
-- `/crates/slicky-core/src/device.rs` — empty placeholder
-- `/crates/slicky-cli/Cargo.toml`
-- `/crates/slicky-cli/src/main.rs` — `fn main() {}`
-- `/crates/slicky-daemon/Cargo.toml`
-- `/crates/slicky-daemon/src/main.rs` — `fn main() {}`
-- `/crates/slicky-daemon/src/api.rs` — empty
-- `/crates/slicky-daemon/src/state.rs` — empty
-- `/crates/slicky-daemon/src/slack.rs` — empty
-- `/crates/slicky-ffi/Cargo.toml`
-- `/crates/slicky-ffi/cbindgen.toml`
-- `/crates/slicky-ffi/build.rs`
-- `/crates/slicky-ffi/src/lib.rs` — empty
+- `/crates/statuslight-core/Cargo.toml`
+- `/crates/statuslight-core/src/lib.rs` — `pub mod` declarations
+- `/crates/statuslight-core/src/error.rs` — empty placeholder
+- `/crates/statuslight-core/src/color.rs` — empty placeholder
+- `/crates/statuslight-core/src/protocol.rs` — empty placeholder
+- `/crates/statuslight-core/src/device.rs` — empty placeholder
+- `/crates/statuslight-cli/Cargo.toml`
+- `/crates/statuslight-cli/src/main.rs` — `fn main() {}`
+- `/crates/statuslight-daemon/Cargo.toml`
+- `/crates/statuslight-daemon/src/main.rs` — `fn main() {}`
+- `/crates/statuslight-daemon/src/api.rs` — empty
+- `/crates/statuslight-daemon/src/state.rs` — empty
+- `/crates/statuslight-daemon/src/slack.rs` — empty
+- `/crates/statuslight-ffi/Cargo.toml`
+- `/crates/statuslight-ffi/cbindgen.toml`
+- `/crates/statuslight-ffi/build.rs`
+- `/crates/statuslight-ffi/src/lib.rs` — empty
 
 **Verify:** `cargo check --workspace` succeeds.
 
-### Step 2: `slicky-core` — implement all modules
+### Step 2: `statuslight-core` — implement all modules
 Implement in this order (each builds on the prior):
-1. `error.rs` — `SlickyError` enum, `Result` alias
+1. `error.rs` — `StatusLightError` enum, `Result` alias
 2. `color.rs` — `Color` struct with all methods, `Preset` enum with all methods, unit tests
 3. `protocol.rs` — constants, `build_set_color_report()`, `build_off_report()`, unit tests
-4. `device.rs` — `SlickyDevice` trait, `HidSlickyDevice`, `DeviceInfo`
+4. `device.rs` — `StatusLightDevice` trait, `HidSlickyDevice`, `DeviceInfo`
 
-**Verify:** `cargo test -p slicky-core` passes. All color/protocol tests green.
+**Verify:** `cargo test -p statuslight-core` passes. All color/protocol tests green.
 
-### Step 3: `slicky-cli` — full CLI implementation
+### Step 3: `statuslight-cli` — full CLI implementation
 Implement clap derive structs and all command handlers. Each handler: open device, perform action, print result, handle errors with `.context()`.
 
-**Verify:** `cargo build -p slicky-cli` produces working `slicky` binary. Manual test: `slicky set red`, `slicky off`, `slicky presets`, `slicky devices`.
+**Verify:** `cargo build -p statuslight-cli` produces working `statuslight` binary. Manual test: `statuslight set red`, `statuslight off`, `statuslight presets`, `statuslight devices`.
 
-### Step 4: `slicky-ffi` — C FFI layer
+### Step 4: `statuslight-ffi` — C FFI layer
 Implement all `extern "C"` functions with panic catching. Set up cbindgen build script.
 
-**Verify:** `cargo build -p slicky-ffi` produces `libslicky_ffi.a` and `libslicky_ffi.dylib`. `slicky.h` is generated. Run `nm target/debug/libslicky_ffi.a | grep slicky_` to confirm exported symbols.
+**Verify:** `cargo build -p statuslight-ffi` produces `libstatuslight_ffi.a` and `libstatuslight_ffi.dylib`. `statuslight.h` is generated. Run `nm target/debug/libstatuslight_ffi.a | grep statuslight_` to confirm exported symbols.
 
-### Step 5: `slicky-daemon` — HTTP daemon with Slack
+### Step 5: `statuslight-daemon` — HTTP daemon with Slack
 Implement in this order:
 1. `state.rs` — `AppState`, `SlackState`
 2. `api.rs` — axum router, all route handlers, request/response serde types
 3. `slack.rs` — `fetch_slack_color`, `start_polling`, `stop_polling`, `default_emoji_map`
 4. `main.rs` — clap args, socket bind, state initialization, graceful shutdown
 
-**Verify:** `cargo build -p slicky-daemon`. Start with `slickyd`, test with:
+**Verify:** `cargo build -p statuslight-daemon`. Start with `statuslightd`, test with:
 ```bash
-curl --unix-socket /tmp/slicky.sock http://localhost/status
-curl --unix-socket /tmp/slicky.sock -X POST -H 'Content-Type: application/json' -d '{"color":"red"}' http://localhost/color
-curl --unix-socket /tmp/slicky.sock -X POST http://localhost/off
-curl --unix-socket /tmp/slicky.sock http://localhost/presets
+curl --unix-socket /tmp/statuslight.sock http://localhost/status
+curl --unix-socket /tmp/statuslight.sock -X POST -H 'Content-Type: application/json' -d '{"color":"red"}' http://localhost/color
+curl --unix-socket /tmp/statuslight.sock -X POST http://localhost/off
+curl --unix-socket /tmp/statuslight.sock http://localhost/presets
 ```
 
 ### Step 6: Final verification
@@ -681,15 +681,15 @@ cargo test --workspace           # all tests pass
 ## CLI Usage (end result)
 
 ```
-slicky set red              # preset color
-slicky set available        # status preset (green)
-slicky set in-meeting       # hyphenated preset
-slicky rgb 255 128 0        # exact RGB
-slicky hex "#FF8000"        # hex color (quotes for shell)
-slicky hex ff8000           # hex without # prefix
-slicky off                  # turn off
-slicky presets              # list all presets with hex colors
-slicky devices              # list connected Slicky devices
+statuslight set red              # preset color
+statuslight set available        # status preset (green)
+statuslight set in-meeting       # hyphenated preset
+statuslight rgb 255 128 0        # exact RGB
+statuslight hex "#FF8000"        # hex color (quotes for shell)
+statuslight hex ff8000           # hex without # prefix
+statuslight off                  # turn off
+statuslight presets              # list all presets with hex colors
+statuslight devices              # list connected Slicky devices
 ```
 
 ---
@@ -698,24 +698,24 @@ slicky devices              # list connected Slicky devices
 
 ```bash
 # Start daemon (foreground)
-slickyd --socket /tmp/slicky.sock
+statuslightd --socket /tmp/statuslight.sock
 
 # Start with Slack sync
-slickyd --slack-token xoxp-... --slack-interval 30
+statuslightd --slack-token xoxp-... --slack-interval 30
 
 # Control via curl
-curl --unix-socket /tmp/slicky.sock http://localhost/status
-curl --unix-socket /tmp/slicky.sock -X POST \
+curl --unix-socket /tmp/statuslight.sock http://localhost/status
+curl --unix-socket /tmp/statuslight.sock -X POST \
   -H 'Content-Type: application/json' \
   -d '{"color":"red"}' http://localhost/color
-curl --unix-socket /tmp/slicky.sock -X POST http://localhost/off
+curl --unix-socket /tmp/statuslight.sock -X POST http://localhost/off
 
 # Configure Slack via API
-curl --unix-socket /tmp/slicky.sock -X POST \
+curl --unix-socket /tmp/statuslight.sock -X POST \
   -H 'Content-Type: application/json' \
   -d '{"token":"xoxp-...","emoji_map":{":no_entry:":"#FF0000"}}' \
   http://localhost/slack/configure
-curl --unix-socket /tmp/slicky.sock -X POST http://localhost/slack/enable
+curl --unix-socket /tmp/statuslight.sock -X POST http://localhost/slack/enable
 ```
 
 ---
@@ -723,8 +723,8 @@ curl --unix-socket /tmp/slicky.sock -X POST http://localhost/slack/enable
 ## FFI Header (generated by cbindgen)
 
 ```c
-#ifndef SLICKY_FFI_H
-#define SLICKY_FFI_H
+#ifndef STATUSLIGHT_FFI_H
+#define STATUSLIGHT_FFI_H
 
 /* Generated by cbindgen — do not edit manually */
 
@@ -734,27 +734,27 @@ curl --unix-socket /tmp/slicky.sock -X POST http://localhost/slack/enable
 extern "C" {
 #endif
 
-void    slicky_init(void);
-int32_t slicky_set_rgb(uint8_t r, uint8_t g, uint8_t b);
-int32_t slicky_set_hex(const char *hex);
-int32_t slicky_set_preset(const char *name);
-int32_t slicky_off(void);
-int32_t slicky_is_connected(void);
+void    statuslight_init(void);
+int32_t statuslight_set_rgb(uint8_t r, uint8_t g, uint8_t b);
+int32_t statuslight_set_hex(const char *hex);
+int32_t statuslight_set_preset(const char *name);
+int32_t statuslight_off(void);
+int32_t statuslight_is_connected(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* SLICKY_FFI_H */
+#endif /* STATUSLIGHT_FFI_H */
 ```
 
 ---
 
 ## Future Work (not in this scaffold)
 
-- **macOS GUI**: Swift/SwiftUI app at `macos/OpenSlicky/` linking `libslicky_ffi.a`
-- **Config file**: `~/.config/slicky/config.toml` for persisting Slack token, emoji map, socket path
+- **macOS GUI**: Swift/SwiftUI app at `macos/StatusLight/` linking `libstatuslight_ffi.a`
+- **Config file**: `~/.config/statuslight/config.toml` for persisting Slack token, emoji map, socket path
 - **launchd plist**: Auto-start daemon on login
-- **Homebrew formula**: `brew install openslicky`
+- **Homebrew formula**: `brew install statuslight`
 - **Windows/Linux support**: Test hidapi on other platforms, conditional compilation if needed
 - **Slack Events API**: Replace polling with real-time WebSocket (Socket Mode) for instant status sync

@@ -1,4 +1,4 @@
-# OpenSlicky
+# StatusLight
 
 **Open-source driver and tools for the [Lexcelon Slicky](https://www.lexcelon.com/products/slicky) USB status light.**
 
@@ -8,10 +8,10 @@ The Slicky is a USB-connected desk light that communicates your availability via
 
 | Component | Description |
 |-----------|-------------|
-| **slicky-core** | Core library — color handling, HID protocol, device communication |
-| **slicky** (CLI) | Command-line tool to control the light |
-| **slickyd** (daemon) | HTTP daemon with REST API and Slack integration |
-| **slicky-ffi** | C FFI bindings for building native GUIs (Swift, etc.) |
+| **statuslight-core** | Core library — color handling, HID protocol, device communication |
+| **statuslight** (CLI) | Command-line tool to control the light |
+| **statuslightd** (daemon) | HTTP daemon with REST API and Slack integration |
+| **statuslight-ffi** | C FFI bindings for building native GUIs (Swift, etc.) |
 
 ## Features
 
@@ -25,16 +25,16 @@ The Slicky is a USB-connected desk light that communicates your availability via
 
 ```bash
 # Set to red
-slicky set red
+statuslight set red
 
 # Set to a custom hex color
-slicky hex "#FF8000"
+statuslight hex "#FF8000"
 
 # Turn off
-slicky off
+statuslight off
 
 # List presets
-slicky presets
+statuslight presets
 ```
 
 ## Getting Started

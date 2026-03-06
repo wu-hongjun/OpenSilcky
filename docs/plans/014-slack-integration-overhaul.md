@@ -8,7 +8,7 @@ configurable event→animation rules stored in TOML.
 
 ## Changes Made
 
-### Core (`slicky-core`)
+### Core (`statuslight-core`)
 - **config.rs**: Expanded `SlackConfig` with three-token model (`app_token`,
   `bot_token`, `user_token`), `events_enabled`, `emoji_colors` HashMap,
   `rules` Vec. Added `SlackRule` struct. Legacy `token` field migrates
@@ -17,7 +17,7 @@ configurable event→animation rules stored in TOML.
   duration in seconds.
 - **lib.rs**: Re-exported `SlackRule`.
 
-### CLI (`slicky-cli`)
+### CLI (`statuslight-cli`)
 - **slack.rs**: Removed `env!()` macros for `SLACK_CLIENT_ID`/`SLACK_CLIENT_SECRET`,
   OAuth flow, TCP listener. Replaced with guided `setup()` wizard that prompts
   for three tokens, validates them via Slack API, saves to config with default
@@ -25,7 +25,7 @@ configurable event→animation rules stored in TOML.
 - **main.rs**: Renamed `SlackAction::Login`→`Setup`, `Logout`→`Disconnect`.
   Updated status command to check new token fields.
 
-### Daemon (`slicky-daemon`)
+### Daemon (`statuslight-daemon`)
 - **state.rs**: Rewrote `SlackState` with three tokens, `emoji_colors` HashMap,
   `rules` Vec, separate `socket_handle` and `emoji_poll_handle`. Added
   `event_animation_active` AtomicBool and `event_animation_handle` to
@@ -45,10 +45,10 @@ configurable event→animation rules stored in TOML.
 - Added `tokio-tungstenite` 0.24 and `futures-util` 0.3 to workspace and daemon.
 - Added `time` and `sync` features to tokio workspace dep.
 
-### Swift UI (`macos/OpenSlicky/`)
-- **OpenSlickyApp.swift**: `connectSlack()` → `openSlackSetup()` (opens GitHub
+### Swift UI (`macos/StatusLight/`)
+- **StatusLightApp.swift**: `connectSlack()` → `openSlackSetup()` (opens GitHub
   Pages guide). SlackSection shows "Socket Mode" indicator when connected.
-- **SlickyCLI.swift**: Removed `slackLogin()`, added `slackDisconnect()`.
+- **StatusLightCLI.swift**: Removed `slackLogin()`, added `slackDisconnect()`.
   Updated `isSlackConnected()` to check for "connected" instead of "logged in".
 
 ### CI/CD

@@ -27,22 +27,22 @@ users.getPresence ←─(poll 60s)─ "away"  → away preset color ─→ set c
 
 ### 1. Manifest updates
 
-**`crates/slicky-cli/src/slack.rs`** and **`docs/slack-setup/manifest.json`**:
+**`crates/statuslight-cli/src/slack.rs`** and **`docs/slack-setup/manifest.json`**:
 - Add `users:read` to both user and bot scopes (required for `user_change` event and `users.getPresence`)
 - Add `user_change` to `bot_events`
 
-### 2. `crates/slicky-daemon/src/state.rs`
+### 2. `crates/statuslight-daemon/src/state.rs`
 
 Add `user_id: Option<String>` to `SlackState` struct + default `None` in constructor.
 
-### 3. `crates/slicky-daemon/src/main.rs`
+### 3. `crates/statuslight-daemon/src/main.rs`
 
 After Slack state is populated, resolve user ID:
 - Call `slack::resolve_user_id()` which calls `auth.test` with user token
 - Store returned `user_id` in `SlackState`
 - This filters `user_change` events (which fire for ALL workspace users)
 
-### 4. `crates/slicky-daemon/src/slack.rs`
+### 4. `crates/statuslight-daemon/src/slack.rs`
 
 **(A) New helper: `resolve_user_id()`**
 - Calls `auth.test` with token, returns `user_id` string from response
@@ -75,11 +75,11 @@ In the existing poll loop, after `fetch_emoji_color()` returns `None`:
 
 | File | Change |
 |------|--------|
-| `crates/slicky-cli/src/slack.rs` | Add `users:read` scope (user + bot), `user_change` event to manifest |
+| `crates/statuslight-cli/src/slack.rs` | Add `users:read` scope (user + bot), `user_change` event to manifest |
 | `docs/slack-setup/manifest.json` | Same manifest updates |
-| `crates/slicky-daemon/src/state.rs` | Add `user_id` field to `SlackState` |
-| `crates/slicky-daemon/src/main.rs` | Resolve user_id on startup via `auth.test` |
-| `crates/slicky-daemon/src/slack.rs` | Handle `user_change` events, add presence polling, new helpers |
+| `crates/statuslight-daemon/src/state.rs` | Add `user_id` field to `SlackState` |
+| `crates/statuslight-daemon/src/main.rs` | Resolve user_id on startup via `auth.test` |
+| `crates/statuslight-daemon/src/slack.rs` | Handle `user_change` events, add presence polling, new helpers |
 
 ## Verification
 

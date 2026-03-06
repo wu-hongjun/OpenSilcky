@@ -3,37 +3,37 @@
 ## Crate Dependency Graph
 
 ```
-slicky-core  <─── slicky-cli      (binary: "slicky")
-             <─── slicky-daemon   (binary: "slickyd")
-             <─── slicky-ffi      (staticlib + cdylib: "libslicky_ffi")
+statuslight-core  <─── statuslight-cli      (binary: "statuslight")
+                  <─── statuslight-daemon   (binary: "statuslightd")
+                  <─── statuslight-ffi      (staticlib + cdylib: "libstatuslight_ffi")
                         ^
                    Swift GUI (future — links via C bridging header)
 ```
 
-`slicky-core` has zero internal workspace dependencies. All other crates depend only on `slicky-core`.
+`statuslight-core` has zero internal workspace dependencies. All other crates depend only on `statuslight-core`.
 
-## slicky-core
+## statuslight-core
 
 The core library with no binary-specific dependencies. Contains:
 
 | Module | Purpose |
 |--------|---------|
-| `error.rs` | `SlickyError` enum (via `thiserror`), `Result<T>` alias |
+| `error.rs` | `StatusLightError` enum (via `thiserror`), `Result<T>` alias |
 | `color.rs` | `Color` struct (RGB), `Preset` enum, hex parsing |
 | `protocol.rs` | Wire constants, `build_set_color_report()` |
-| `device.rs` | `SlickyDevice` trait, `HidSlickyDevice` impl, `DeviceInfo` |
+| `device.rs` | `StatusLightDevice` trait, `HidSlickyDevice` impl, `DeviceInfo` |
 
 ### Design Decisions
 
-- **`SlickyDevice` trait**: Enables mocking for tests. The trait has a default `off()` implementation.
+- **`StatusLightDevice` trait**: Enables mocking for tests. The trait has a default `off()` implementation.
 - **Stateless device operations**: The CLI opens the device, sends one report, and drops it. No persistent connection needed.
 - **BGR wire order**: The protocol uses BGR byte ordering. This is encapsulated in `protocol.rs` — callers always work with RGB.
 
-## slicky-cli
+## statuslight-cli
 
 Thin binary using `clap` derive macros. Each subcommand opens the device, performs one action, prints the result, and exits.
 
-## slicky-daemon
+## statuslight-daemon
 
 An HTTP daemon using `axum` on a Unix domain socket.
 
@@ -54,7 +54,7 @@ AppState {
 
 A background `tokio::spawn` task polls `users.profile.get` every N seconds, maps the status emoji to a color via the configured emoji map, and sets the device. Errors are logged but don't crash the daemon.
 
-## slicky-ffi
+## statuslight-ffi
 
 C-callable functions for native GUI integration. Safety rules:
 
@@ -62,20 +62,20 @@ C-callable functions for native GUI integration. Safety rules:
 2. Null pointer checks on all `*const c_char` parameters
 3. Invalid UTF-8 returns error code `-5`
 4. Each call is stateless — opens device, writes, closes
-5. `cbindgen` auto-generates `slicky.h` at build time
+5. `cbindgen` auto-generates `statuslight.h` at build time
 
 ## Repository Structure
 
 ```
-OpenSilcky/
+StatusLight/
 ├── Cargo.toml                    # Workspace root
 ├── mkdocs.yml                    # Documentation config
 ├── docs/                         # MkDocs source
 ├── crates/
-│   ├── slicky-core/              # Core library
-│   ├── slicky-cli/               # CLI binary
-│   ├── slicky-daemon/            # HTTP daemon
-│   └── slicky-ffi/               # C FFI
+│   ├── statuslight-core/         # Core library
+│   ├── statuslight-cli/          # CLI binary
+│   ├── statuslight-daemon/       # HTTP daemon
+│   └── statuslight-ffi/          # C FFI
 └── macos/                        # Swift GUI (future)
-    └── OpenSlicky/
+    └── StatusLight/
 ```

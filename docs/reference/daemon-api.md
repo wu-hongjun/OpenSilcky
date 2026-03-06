@@ -1,15 +1,15 @@
 # Daemon API Reference
 
-**Binary:** `slickyd`
+**Binary:** `statuslightd`
 
-The daemon listens on a Unix domain socket (default `/tmp/slicky.sock`) and exposes a JSON REST API.
+The daemon listens on a Unix domain socket (default `/tmp/statuslight.sock`) and exposes a JSON REST API.
 
 ## Starting the Daemon
 
 ```bash
-slickyd                                          # default socket
-slickyd --socket /tmp/slicky.sock                # custom socket
-slickyd --slack-token xoxp-... --slack-interval 30  # with Slack
+statuslightd                                          # default socket
+statuslightd --socket /tmp/statuslight.sock                # custom socket
+statuslightd --slack-token xoxp-... --slack-interval 30  # with Slack
 ```
 
 ## Endpoints

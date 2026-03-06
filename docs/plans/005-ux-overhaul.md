@@ -2,28 +2,28 @@
 
 ## Context
 
-The current OpenSlicky UX has several pain points:
-- **Slack**: No OAuth. Users must manually obtain a `xoxp-` token and pass it as a CLI arg to `slickyd` on every startup. No persistence.
-- **Startup**: No launchd integration. Users must manually run `slickyd` from terminal.
+The current StatusLight UX has several pain points:
+- **Slack**: No OAuth. Users must manually obtain a `xoxp-` token and pass it as a CLI arg to `statuslightd` on every startup. No persistence.
+- **Startup**: No launchd integration. Users must manually run `statuslightd` from terminal.
 - **Updates**: No update checking. Users have no way to know a new version is available.
 
-Goal: Make OpenSlicky "extremely simple" — one command to connect Slack, one command to enable startup, and automatic update notifications.
+Goal: Make StatusLight "extremely simple" — one command to connect Slack, one command to enable startup, and automatic update notifications.
 
 ## Overview
 
 Four features, each building on the previous:
 
-1. **Config file** (slicky-core) — persistent `~/.config/openslicky/config.toml`
-2. **Slack OAuth** (slicky-cli) — `slicky slack login/logout/status`
-3. **Startup management** (slicky-cli) — `slicky startup enable/disable/status`
-4. **Auto-update** (slicky-cli + slicky-daemon) — `slicky update check` + daemon auto-check
+1. **Config file** (statuslight-core) — persistent `~/.config/statuslight/config.toml`
+2. **Slack OAuth** (statuslight-cli) — `statuslight slack login/logout/status`
+3. **Startup management** (statuslight-cli) — `statuslight startup enable/disable/status`
+4. **Auto-update** (statuslight-cli + statuslight-daemon) — `statuslight update check` + daemon auto-check
 
-## 1. Config File (`slicky-core`)
+## 1. Config File (`statuslight-core`)
 
-New module: `crates/slicky-core/src/config.rs`
+New module: `crates/statuslight-core/src/config.rs`
 
 ```toml
-# ~/.config/openslicky/config.toml
+# ~/.config/statuslight/config.toml
 [slack]
 token = "xoxp-..."
 poll_interval_secs = 30
@@ -47,7 +47,7 @@ pub struct Config {
 }
 ```
 
-Methods: `Config::load()`, `Config::save()`, `Config::path()` (returns `~/.config/openslicky/config.toml`)
+Methods: `Config::load()`, `Config::save()`, `Config::path()` (returns `~/.config/statuslight/config.toml`)
 
 ## 2. Slack Credentials & Secrets Strategy
 
@@ -76,13 +76,13 @@ const SLACK_CLIENT_ID: &str = env!("SLACK_CLIENT_ID");
 const SLACK_CLIENT_SECRET: &str = env!("SLACK_CLIENT_SECRET");
 ```
 
-## 3. Slack OAuth Flow (`slicky-cli`)
+## 3. Slack OAuth Flow (`statuslight-cli`)
 
-Module: `crates/slicky-cli/src/slack.rs`
+Module: `crates/statuslight-cli/src/slack.rs`
 
 Slack App configured with `users.profile:read` user scope and redirect URL `http://127.0.0.1:19876/callback`.
 
-### `slicky slack login` flow:
+### `statuslight slack login` flow:
 1. Bind `TcpListener` on `127.0.0.1:19876`
 2. Open browser to Slack OAuth authorize URL
 3. User clicks "Allow" in Slack
@@ -93,40 +93,40 @@ Slack App configured with `users.profile:read` user scope and redirect URL `http
 8. Extract `authed_user.access_token` from response
 9. Save to config, write config file
 
-### `slicky slack logout`: Remove token from config
-### `slicky slack status`: Show connection state with masked token
+### `statuslight slack logout`: Remove token from config
+### `statuslight slack status`: Show connection state with masked token
 
-## 4. Startup Management (`slicky-cli`)
+## 4. Startup Management (`statuslight-cli`)
 
-Module: `crates/slicky-cli/src/startup.rs`
+Module: `crates/statuslight-cli/src/startup.rs`
 
-### `slicky startup enable`:
-1. Find `slickyd` binary (sibling of current exe, or `which slickyd`)
-2. Write LaunchAgent plist to `~/Library/LaunchAgents/com.openslicky.daemon.plist`
+### `statuslight startup enable`:
+1. Find `statuslightd` binary (sibling of current exe, or `which statuslightd`)
+2. Write LaunchAgent plist to `~/Library/LaunchAgents/com.statuslight.daemon.plist`
 3. `launchctl load -w` the plist
 4. Set `config.startup.enabled = true`
 
-### `slicky startup disable`:
+### `statuslight startup disable`:
 1. `launchctl unload -w` the plist
 2. Delete plist file
 3. Set `config.startup.enabled = false`
 
-### `slicky startup status`: Show if enabled + if daemon is running
+### `statuslight startup status`: Show if enabled + if daemon is running
 
-Plist features: `RunAtLoad=true`, `KeepAlive=true`, logs to `/tmp/slicky-daemon.log`
+Plist features: `RunAtLoad=true`, `KeepAlive=true`, logs to `/tmp/statuslight-daemon.log`
 
-## 5. Auto-Update (`slicky-cli` + `slicky-daemon`)
+## 5. Auto-Update (`statuslight-cli` + `statuslight-daemon`)
 
-Modules: `crates/slicky-cli/src/update.rs` (blocking/ureq), `crates/slicky-daemon/src/update.rs` (async/reqwest)
+Modules: `crates/statuslight-cli/src/update.rs` (blocking/ureq), `crates/statuslight-daemon/src/update.rs` (async/reqwest)
 
-- Hit `https://api.github.com/repos/wu-hongjun/OpenSilcky/releases/latest`
+- Hit `https://api.github.com/repos/wu-hongjun/StatusLight/releases/latest`
 - Parse `tag_name`, compare with `CARGO_PKG_VERSION` via `semver`
 - Rate-limit: at most once per 24h (check `config.updates.last_check`)
 - If newer: log message with download URL (no auto-download)
-- `slicky update check`: manual check from CLI
+- `statuslight update check`: manual check from CLI
 - Daemon: `tokio::spawn` non-blocking check on startup if `config.updates.auto_check` is true
 
-## 6. Daemon Changes (`slicky-daemon/src/main.rs`)
+## 6. Daemon Changes (`statuslight-daemon/src/main.rs`)
 
 Token priority: CLI arg > config file.
 Spawns update check on startup.
@@ -137,9 +137,9 @@ Spawns update check on startup.
 
 | Crate | New deps |
 |-------|----------|
-| slicky-core | `anyhow`, `toml`, `dirs`, `chrono` |
-| slicky-cli | `serde_json`, `ureq`, `open`, `semver`, `dirs`, `chrono` |
-| slicky-daemon | `semver`, `chrono` |
+| statuslight-core | `anyhow`, `toml`, `dirs`, `chrono` |
+| statuslight-cli | `serde_json`, `ureq`, `open`, `semver`, `dirs`, `chrono` |
+| statuslight-daemon | `semver`, `chrono` |
 
 ## Files Created/Modified
 
@@ -148,17 +148,17 @@ Spawns update check on startup.
 | `.env` | **New** — Slack secrets for local dev (gitignored) |
 | `.github/workflows/release.yml` | Added env vars to build step |
 | `Cargo.toml` | Added workspace deps |
-| `crates/slicky-core/Cargo.toml` | Added deps |
-| `crates/slicky-core/src/lib.rs` | Added `pub mod config; pub use config::Config;` |
-| `crates/slicky-core/src/config.rs` | **New** — Config struct, load/save |
-| `crates/slicky-cli/Cargo.toml` | Added deps |
-| `crates/slicky-cli/src/main.rs` | Added Slack/Startup/Update subcommands |
-| `crates/slicky-cli/src/slack.rs` | **New** — OAuth login/logout/status |
-| `crates/slicky-cli/src/startup.rs` | **New** — launchd enable/disable/status |
-| `crates/slicky-cli/src/update.rs` | **New** — blocking update check |
-| `crates/slicky-daemon/Cargo.toml` | Added deps |
-| `crates/slicky-daemon/src/main.rs` | Load config, token fallback, spawn update check |
-| `crates/slicky-daemon/src/update.rs` | **New** — async update check |
+| `crates/statuslight-core/Cargo.toml` | Added deps |
+| `crates/statuslight-core/src/lib.rs` | Added `pub mod config; pub use config::Config;` |
+| `crates/statuslight-core/src/config.rs` | **New** — Config struct, load/save |
+| `crates/statuslight-cli/Cargo.toml` | Added deps |
+| `crates/statuslight-cli/src/main.rs` | Added Slack/Startup/Update subcommands |
+| `crates/statuslight-cli/src/slack.rs` | **New** — OAuth login/logout/status |
+| `crates/statuslight-cli/src/startup.rs` | **New** — launchd enable/disable/status |
+| `crates/statuslight-cli/src/update.rs` | **New** — blocking update check |
+| `crates/statuslight-daemon/Cargo.toml` | Added deps |
+| `crates/statuslight-daemon/src/main.rs` | Load config, token fallback, spawn update check |
+| `crates/statuslight-daemon/src/update.rs` | **New** — async update check |
 | `docs/plans/005-ux-overhaul.md` | **New** — this plan |
 
 ## Post-Merge Steps
@@ -170,10 +170,10 @@ After merging, add `SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET` as GitHub reposit
 1. `cargo build --workspace` — compiles clean
 2. `cargo clippy --workspace -- -D warnings` — passes
 3. `cargo test --workspace` — all tests pass
-4. `slicky slack login` opens browser, completes OAuth
-5. `slicky slack status` shows "logged in"
-6. `slicky startup enable` creates plist, daemon starts
-7. `slicky startup status` shows enabled + running
-8. `slicky startup disable` stops daemon, removes plist
-9. `slicky update check` prints current vs latest version
-10. `slickyd` reads token from config (no `--slack-token` needed)
+4. `statuslight slack login` opens browser, completes OAuth
+5. `statuslight slack status` shows "logged in"
+6. `statuslight startup enable` creates plist, daemon starts
+7. `statuslight startup status` shows enabled + running
+8. `statuslight startup disable` stops daemon, removes plist
+9. `statuslight update check` prints current vs latest version
+10. `statuslightd` reads token from config (no `--slack-token` needed)

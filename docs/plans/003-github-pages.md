@@ -2,7 +2,7 @@
 
 ## Context
 
-OpenSlicky already has a complete MkDocs Material setup (`mkdocs.yml`) and documentation content in `/docs/`. There's no workflow to deploy the docs to GitHub Pages. We need a workflow that builds and deploys the site automatically.
+StatusLight already has a complete MkDocs Material setup (`mkdocs.yml`) and documentation content in `/docs/`. There's no workflow to deploy the docs to GitHub Pages. We need a workflow that builds and deploys the site automatically.
 
 ## Changes
 

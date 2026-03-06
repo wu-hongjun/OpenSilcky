@@ -2,13 +2,13 @@
 
 ## Context
 
-OpenSlicky's Slicky device accepts single 65-byte HID color reports — no built-in animation. Presets are a hardcoded Rust enum with fixed RGB values. Users want animations (breathing, flash, SOS, etc.), a color picker, customizable built-in colors, and the ability to create their own presets. All animation must be software-driven (rapid HID writes from the host).
+StatusLight's Slicky device accepts single 65-byte HID color reports — no built-in animation. Presets are a hardcoded Rust enum with fixed RGB values. Users want animations (breathing, flash, SOS, etc.), a color picker, customizable built-in colors, and the ability to create their own presets. All animation must be software-driven (rapid HID writes from the host).
 
 ## Architecture
 
-- **Animations**: CLI blocking process (`slicky animate breathing --color green`) opens device, runs 30 FPS loop, exits on SIGTERM. SwiftUI manages the child process lifecycle.
-- **Config-based customization**: `~/.config/openslicky/config.toml` gains `[colors]` (override map) and `[[custom_presets]]` (user presets) sections.
-- **Color picker**: Native SwiftUI `ColorPicker` → convert to hex → `slicky hex #XXYYZZ`.
+- **Animations**: CLI blocking process (`statuslight animate breathing --color green`) opens device, runs 30 FPS loop, exits on SIGTERM. SwiftUI manages the child process lifecycle.
+- **Config-based customization**: `~/.config/statuslight/config.toml` gains `[colors]` (override map) and `[[custom_presets]]` (user presets) sections.
+- **Color picker**: Native SwiftUI `ColorPicker` → convert to hex → `statuslight hex #XXYYZZ`.
 
 ## Config Schema Additions
 
@@ -40,26 +40,26 @@ pub custom_presets: Vec<CustomPreset>,          // user presets
 
 | File | Purpose |
 |------|---------|
-| `crates/slicky-core/src/animation.rs` | Animation types enum, frame computation math (pure functions) |
-| `crates/slicky-cli/src/animate.rs` | CLI `animate` handler: device loop at 30 FPS, ctrlc cleanup |
-| `crates/slicky-cli/src/color_cmd.rs` | `slicky color override/reset/list` handlers |
-| `crates/slicky-cli/src/preset_cmd.rs` | `slicky preset add/remove/list` handlers |
+| `crates/statuslight-core/src/animation.rs` | Animation types enum, frame computation math (pure functions) |
+| `crates/statuslight-cli/src/animate.rs` | CLI `animate` handler: device loop at 30 FPS, ctrlc cleanup |
+| `crates/statuslight-cli/src/color_cmd.rs` | `statuslight color override/reset/list` handlers |
+| `crates/statuslight-cli/src/preset_cmd.rs` | `statuslight preset add/remove/list` handlers |
 | `docs/plans/008-animations-customization.md` | This plan |
 
 ## Modified Files
 
 | File | Changes |
 |------|---------|
-| `crates/slicky-core/src/lib.rs` | Add `pub mod animation;`, re-export types |
-| `crates/slicky-core/src/color.rs` | Add `Color::lerp()`, `scale_brightness()`, `from_hsv()`, `Preset::color_with_overrides()` |
-| `crates/slicky-core/src/config.rs` | Add `colors: HashMap`, `custom_presets: Vec<CustomPreset>`, `CustomPreset` struct |
-| `crates/slicky-core/src/error.rs` | Add `DuplicatePreset`, `PresetNotFound` variants |
-| `crates/slicky-cli/src/main.rs` | Add `Animate`, `ColorCmd`, `PresetCmd` commands; update `Set` to check overrides + custom presets |
-| `crates/slicky-cli/Cargo.toml` | Add `ctrlc = "3"` dependency |
-| `crates/slicky-ffi/src/lib.rs` | Handle new error variants in `error_code()` match |
-| `crates/slicky-daemon/src/api.rs` | Handle new error variants in `map_slicky_error()` match |
-| `macos/OpenSlicky/OpenSlickyApp.swift` | Add `ColorPickerSection`, `AnimationSection`, `CustomPresetsSection`; ViewModel animation process mgmt |
-| `macos/OpenSlicky/SlickyCLI.swift` | Add `animate()`, `stopAnimation()`, `setHex()`, `listPresetsJSON()` methods |
+| `crates/statuslight-core/src/lib.rs` | Add `pub mod animation;`, re-export types |
+| `crates/statuslight-core/src/color.rs` | Add `Color::lerp()`, `scale_brightness()`, `from_hsv()`, `Preset::color_with_overrides()` |
+| `crates/statuslight-core/src/config.rs` | Add `colors: HashMap`, `custom_presets: Vec<CustomPreset>`, `CustomPreset` struct |
+| `crates/statuslight-core/src/error.rs` | Add `DuplicatePreset`, `PresetNotFound` variants |
+| `crates/statuslight-cli/src/main.rs` | Add `Animate`, `ColorCmd`, `PresetCmd` commands; update `Set` to check overrides + custom presets |
+| `crates/statuslight-cli/Cargo.toml` | Add `ctrlc = "3"` dependency |
+| `crates/statuslight-ffi/src/lib.rs` | Handle new error variants in `error_code()` match |
+| `crates/statuslight-daemon/src/api.rs` | Handle new error variants in `map_statuslight_error()` match |
+| `macos/StatusLight/StatusLightApp.swift` | Add `ColorPickerSection`, `AnimationSection`, `CustomPresetsSection`; ViewModel animation process mgmt |
+| `macos/StatusLight/StatusLightCLI.swift` | Add `animate()`, `stopAnimation()`, `setHex()`, `listPresetsJSON()` methods |
 
 ## Animation Types & Math
 
@@ -78,24 +78,24 @@ All take `t = elapsed_secs * speed`, return `Color`.
 
 ```bash
 # Animations (blocking, Ctrl-C to stop)
-slicky animate breathing --color green --speed 2.0
-slicky animate flash --color red
-slicky animate sos --color white
-slicky animate rainbow
-slicky animate transition --color red --color2 blue
+statuslight animate breathing --color green --speed 2.0
+statuslight animate flash --color red
+statuslight animate sos --color white
+statuslight animate rainbow
+statuslight animate transition --color red --color2 blue
 
 # Color overrides
-slicky color override red "#FF4444"
-slicky color reset red
-slicky color reset --all
-slicky color list
+statuslight color override red "#FF4444"
+statuslight color reset red
+statuslight color reset --all
+statuslight color list
 
 # Custom presets
-slicky preset add focus --color "#6A0DAD"
-slicky preset add meeting-pulse --color "#FF4500" --animation breathing --speed 1.5
-slicky preset remove focus
-slicky preset list              # human-readable
-slicky preset list --json       # for SwiftUI parsing
+statuslight preset add focus --color "#6A0DAD"
+statuslight preset add meeting-pulse --color "#FF4500" --animation breathing --speed 1.5
+statuslight preset remove focus
+statuslight preset list              # human-readable
+statuslight preset list --json       # for SwiftUI parsing
 ```
 
 ## SwiftUI View Changes
@@ -114,7 +114,7 @@ MainView
 ```
 
 **Animation process lifecycle in ViewModel:**
-1. `startAnimation()` → kill existing process → spawn `slicky animate ...` → store `Process` reference
+1. `startAnimation()` → kill existing process → spawn `statuslight animate ...` → store `Process` reference
 2. `stopAnimation()` → `process.terminate()` + `waitUntilExit()` on background queue
 3. Any `setPreset()`/`turnOff()`/`setPickerColor()` → calls `stopAnimation()` first
 
@@ -134,9 +134,9 @@ Phases 1-2 are independent (parallel). Phase 3 needs 1. Phase 4 needs 2. Phase 5
 
 1. `cargo test --workspace` — all existing + new unit tests pass (103 tests)
 2. `cargo clippy --workspace -- -D warnings` — no warnings
-3. `slicky animate breathing --color green` — light breathes, Ctrl-C stops cleanly
-4. `slicky color override red "#FF4444"` → `slicky set red` uses new color; `slicky color reset red` restores default
-5. `slicky preset add focus --color "#6A0DAD"` → `slicky set focus` works
+3. `statuslight animate breathing --color green` — light breathes, Ctrl-C stops cleanly
+4. `statuslight color override red "#FF4444"` → `statuslight set red` uses new color; `statuslight color reset red` restores default
+5. `statuslight preset add focus --color "#6A0DAD"` → `statuslight set focus` works
 6. `build-app.sh 0.1.0` compiles; menu bar popover shows color picker, animation controls, custom presets
 7. Clicking animation Play → device animates; clicking a color preset → stops animation, sets static color
 8. Color picker → pick color → Set → device changes

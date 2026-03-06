@@ -1,4 +1,4 @@
-# OpenSlicky
+# StatusLight
 
 Open-source driver and tools for the [Lexcelon Slicky](https://www.lexcelon.com/products/slicky) USB status light.
 
@@ -10,14 +10,14 @@ The Slicky is a USB-connected desk light that communicates your availability via
 
 | Crate | Description |
 |-------|-------------|
-| **slicky-core** | Core library — color handling, HID protocol, device communication |
-| **slicky** (CLI) | Command-line tool to control the light |
-| **slickyd** (daemon) | HTTP daemon with REST API and Slack integration |
-| **slicky-ffi** | C FFI bindings for building native GUIs (Swift, etc.) |
+| **statuslight-core** | Core library — color handling, HID protocol, device communication |
+| **statuslight** (CLI) | Command-line tool to control the light |
+| **statuslightd** (daemon) | HTTP daemon with REST API and Slack integration |
+| **statuslight-ffi** | C FFI bindings for building native GUIs (Swift, etc.) |
 
 ## Install
 
-Pre-built `.dmg` releases are available for **macOS Apple Silicon** (ARM64) on the [Releases](https://github.com/wu-hongjun/OpenSilcky/releases) page. Download, mount, and copy the binaries to a directory in your `PATH`.
+Pre-built `.dmg` releases are available for **macOS Apple Silicon** (ARM64) on the [Releases](https://github.com/wu-hongjun/StatusLight/releases) page. Download, mount, and copy the binaries to a directory in your `PATH`.
 
 For other platforms (macOS Intel, Linux), build from source:
 
@@ -26,23 +26,23 @@ For other platforms (macOS Intel, Linux), build from source:
 brew install hidapi
 
 # Build
-git clone https://github.com/wu-hongjun/OpenSilcky.git
-cd OpenSilcky
+git clone https://github.com/wu-hongjun/StatusLight.git
+cd StatusLight
 cargo build --workspace --release
 
 # Install the CLI
-cargo install --path crates/slicky-cli
+cargo install --path crates/statuslight-cli
 ```
 
 ```bash
 # Set to red
-slicky set red
+statuslight set red
 
 # Set to a custom hex color
-slicky hex "#FF8000"
+statuslight hex "#FF8000"
 
 # Turn off
-slicky off
+statuslight off
 ```
 
 ## Features
@@ -56,22 +56,22 @@ slicky off
 ## Project Structure
 
 ```
-OpenSilcky/
+StatusLight/
 ├── Cargo.toml                    # Workspace root
 ├── mkdocs.yml                    # Documentation config
 ├── docs/                         # MkDocs source
 ├── crates/
-│   ├── slicky-core/              # Core library
-│   ├── slicky-cli/               # CLI binary
-│   ├── slicky-daemon/            # HTTP daemon
-│   └── slicky-ffi/               # C FFI
+│   ├── statuslight-core/         # Core library
+│   ├── statuslight-cli/          # CLI binary
+│   ├── statuslight-daemon/       # HTTP daemon
+│   └── statuslight-ffi/          # C FFI
 └── macos/                        # Swift GUI (future)
-    └── OpenSlicky/
+    └── StatusLight/
 ```
 
 ## Documentation
 
-Full docs are available at [wu-hongjun.github.io/OpenSilcky](https://wu-hongjun.github.io/OpenSilcky/).
+Full docs are available at [wu-hongjun.github.io/StatusLight](https://wu-hongjun.github.io/StatusLight/).
 
 ## License
 

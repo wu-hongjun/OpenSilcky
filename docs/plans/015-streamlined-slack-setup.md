@@ -20,7 +20,7 @@ The Slack setup from Plan 014 works but requires 12+ steps across 3 interfaces. 
 - `setup()` — updated to auto-open browser, clearer step-by-step flow
 - New `SlackAction` variants: `OpenSetup`, `Configure { app_token, bot_token, user_token }`
 
-### macOS App (`SlickyCLI.swift`, `OpenSlickyApp.swift`)
+### macOS App (`StatusLightCLI.swift`, `StatusLightApp.swift`)
 - `openSlackAppCreation()` — CLI bridge for `slack open-setup`
 - `configureSlack()` — CLI bridge for `slack configure`
 - `SlackSetupWizard` — 4-step sheet: create app, app token, install & tokens, verify & connect
@@ -29,15 +29,15 @@ The Slack setup from Plan 014 works but requires 12+ steps across 3 interfaces. 
 
 ### Docs
 - `docs/slack-setup/index.md` — simplified to reflect auto-open browser flow
-- `docs/slack-setup/manifest.json` — app name "OpenSlicky" → "Status Light"
+- `docs/slack-setup/manifest.json` — app name "StatusLight" → "Status Light"
 
 ## Files Modified
 
 | File | Change |
 |------|--------|
-| `crates/slicky-cli/src/slack.rs` | New helpers + streamlined setup |
-| `crates/slicky-cli/src/main.rs` | New SlackAction variants |
-| `macos/OpenSlicky/SlickyCLI.swift` | New CLI bridge methods |
-| `macos/OpenSlicky/OpenSlickyApp.swift` | SlackSetupWizard + updated SlackSection |
+| `crates/statuslight-cli/src/slack.rs` | New helpers + streamlined setup |
+| `crates/statuslight-cli/src/main.rs` | New SlackAction variants |
+| `macos/StatusLight/StatusLightCLI.swift` | New CLI bridge methods |
+| `macos/StatusLight/StatusLightApp.swift` | SlackSetupWizard + updated SlackSection |
 | `docs/slack-setup/index.md` | Simplified docs |
 | `docs/slack-setup/manifest.json` | Renamed to "Status Light" |

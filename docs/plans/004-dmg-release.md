@@ -18,7 +18,7 @@ Remove the 3-target matrix. Single job on `macos-latest` (Apple Silicon):
 - Single target (no matrix) — saves 2/3 of CI runner time
 - `create-dmg` (Homebrew) to build the `.dmg`
 - Merged build + release into one job (no artifact upload/download needed)
-- `.dmg` contains `slicky`, `slickyd`, and FFI artifacts
+- `.dmg` contains `statuslight`, `statuslightd`, and FFI artifacts
 
 ### 2. Update `README.md` — Install section
 
@@ -41,5 +41,5 @@ Per project convention.
 1. Tag a new version (e.g., `v0.1.1`) to trigger the workflow
 2. Workflow runs on a single `macos-latest` runner
 3. GitHub Release contains a `.dmg` file
-4. Download and mount the `.dmg` — contains `slicky` and `slickyd` binaries
-5. `./slicky devices` runs correctly from the mounted volume
+4. Download and mount the `.dmg` — contains `statuslight` and `statuslightd` binaries
+5. `./statuslight devices` runs correctly from the mounted volume

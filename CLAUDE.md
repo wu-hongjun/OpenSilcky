@@ -1,4 +1,4 @@
-# OpenSlicky — Project Instructions
+# StatusLight — Project Instructions
 
 ## Plans
 
