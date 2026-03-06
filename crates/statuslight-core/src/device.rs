@@ -10,7 +10,13 @@ use crate::error::{Result, StatusLightError};
 use crate::protocol::{self, BUFFER_SIZE, PRODUCT_ID, VENDOR_ID};
 
 /// Trait for controlling a status light device. Enables mocking in tests.
-pub trait StatusLightDevice {
+pub trait StatusLightDevice: Send {
+    /// Human-readable driver name (e.g. "Slicky", "Arduino RGB").
+    fn driver_name(&self) -> &str;
+
+    /// Device serial number, if available.
+    fn serial(&self) -> Option<&str>;
+
     /// Set the device to the given color.
     fn set_color(&self, color: Color) -> Result<()>;
 
@@ -36,6 +42,7 @@ pub struct DeviceInfo {
 /// Real HID-backed Slicky device.
 pub struct HidSlickyDevice {
     device: hidapi::HidDevice,
+    serial: Option<String>,
 }
 
 impl HidSlickyDevice {
@@ -53,8 +60,9 @@ impl HidSlickyDevice {
         match devices.len() {
             0 => Err(StatusLightError::DeviceNotFound),
             1 => {
+                let serial = devices[0].serial_number().map(|s| s.to_string());
                 let device = devices[0].open_device(&api)?;
-                Ok(Self { device })
+                Ok(Self { device, serial })
             }
             count => Err(StatusLightError::MultipleDevices { count }),
         }
@@ -72,8 +80,9 @@ impl HidSlickyDevice {
             })
             .ok_or(StatusLightError::DeviceNotFound)?;
 
+        let serial = info.serial_number().map(|s| s.to_string());
         let device = info.open_device(&api)?;
-        Ok(Self { device })
+        Ok(Self { device, serial })
     }
 
     /// List all connected Slicky devices.
@@ -94,6 +103,14 @@ impl HidSlickyDevice {
 }
 
 impl StatusLightDevice for HidSlickyDevice {
+    fn driver_name(&self) -> &str {
+        "Slicky"
+    }
+
+    fn serial(&self) -> Option<&str> {
+        self.serial.as_deref()
+    }
+
     fn set_color(&self, color: Color) -> Result<()> {
         let report = protocol::build_set_color_report(color);
         let written = self.device.write(&report)?;
