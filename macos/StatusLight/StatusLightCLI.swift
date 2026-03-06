@@ -1,17 +1,17 @@
 import Foundation
 
-/// Async wrapper around the bundled `slicky` CLI binary.
+/// Async wrapper around the bundled `statuslight` CLI binary.
 ///
-/// All communication with the Slicky device and services goes through
+/// All communication with the StatusLight device and services goes through
 /// the CLI binary located next to this executable in Contents/MacOS/.
-final class SlickyCLI {
-    /// Path to the `slicky` binary bundled inside the app.
+final class StatusLightCLI {
+    /// Path to the `statuslight` binary bundled inside the app.
     private let binaryPath: String
 
     init() {
         let execURL = Bundle.main.executableURL!
         let macosDir = execURL.deletingLastPathComponent()
-        self.binaryPath = macosDir.appendingPathComponent("slicky").path
+        self.binaryPath = macosDir.appendingPathComponent("statuslight").path
     }
 
     // MARK: - Light Control
@@ -80,7 +80,7 @@ final class SlickyCLI {
 
     // MARK: - Devices
 
-    /// Check if any Slicky device is connected.
+    /// Check if any StatusLight device is connected.
     func isDeviceConnected() async -> Bool {
         let (output, ok) = await run(["devices"])
         guard ok else { return false }
@@ -159,7 +159,7 @@ final class SlickyCLI {
     /// Install update with admin privileges (fallback when normal install fails due to permissions).
     func installUpdateAdmin() -> Bool {
         let macosDir = shellEscape(URL(fileURLWithPath: binaryPath).deletingLastPathComponent().path)
-        let script = "'\(macosDir)/slicky' update install"
+        let script = "'\(macosDir)/statuslight' update install"
         return runOsascriptAdmin(script)
     }
 
@@ -168,7 +168,7 @@ final class SlickyCLI {
     /// Create symlinks in /usr/local/bin (requires admin).
     func installSymlinks() -> Bool {
         let macosDir = shellEscape(URL(fileURLWithPath: binaryPath).deletingLastPathComponent().path)
-        let script = "mkdir -p /usr/local/bin && ln -sf '\(macosDir)/slicky' /usr/local/bin/slicky && ln -sf '\(macosDir)/slickyd' /usr/local/bin/slickyd"
+        let script = "mkdir -p /usr/local/bin && ln -sf '\(macosDir)/statuslight' /usr/local/bin/statuslight && ln -sf '\(macosDir)/statuslightd' /usr/local/bin/statuslightd"
         return runOsascriptAdmin(script)
     }
 
@@ -176,7 +176,7 @@ final class SlickyCLI {
     /// Single admin prompt handles symlinks + app removal.
     func removeSymlinksAndApp() -> Bool {
         let appPath = shellEscape(Bundle.main.bundlePath)
-        let script = "rm -f /usr/local/bin/slicky /usr/local/bin/slickyd && rm -rf '\(appPath)'"
+        let script = "rm -f /usr/local/bin/statuslight /usr/local/bin/statuslightd && rm -rf '\(appPath)'"
         return runOsascriptAdmin(script)
     }
 
@@ -184,7 +184,7 @@ final class SlickyCLI {
     func stopDaemon() {
         // Unload LaunchAgent
         let plistPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/LaunchAgents/com.openslicky.daemon.plist").path
+            .appendingPathComponent("Library/LaunchAgents/com.statuslight.daemon.plist").path
         if FileManager.default.fileExists(atPath: plistPath) {
             let unload = Process()
             unload.executableURL = URL(fileURLWithPath: "/bin/launchctl")
@@ -194,10 +194,10 @@ final class SlickyCLI {
             try? FileManager.default.removeItem(atPath: plistPath)
         }
 
-        // Kill slickyd only (not slicky — that would kill CLI commands we need)
+        // Kill statuslightd only (not statuslight — that would kill CLI commands we need)
         let killall = Process()
         killall.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
-        killall.arguments = ["slickyd"]
+        killall.arguments = ["statuslightd"]
         try? killall.run()
         killall.waitUntilExit()
 
@@ -205,7 +205,7 @@ final class SlickyCLI {
         for _ in 0..<10 {
             let check = Process()
             check.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
-            check.arguments = ["-x", "slickyd"]
+            check.arguments = ["-x", "statuslightd"]
             check.standardOutput = FileHandle.nullDevice
             check.standardError = FileHandle.nullDevice
             try? check.run()
@@ -236,7 +236,7 @@ final class SlickyCLI {
 
     private var markerPath: String {
         let configDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/openslicky")
+            .appendingPathComponent(".config/statuslight")
         return configDir.appendingPathComponent(".installed-\(appVersion)").path
     }
 
@@ -255,7 +255,7 @@ final class SlickyCLI {
     /// Remove all install markers.
     func removeMarkers() {
         let configDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/openslicky")
+            .appendingPathComponent(".config/statuslight")
         if let contents = try? FileManager.default.contentsOfDirectory(atPath: configDir.path) {
             for file in contents where file.hasPrefix(".installed-") {
                 try? FileManager.default.removeItem(atPath: configDir.appendingPathComponent(file).path)

@@ -4,7 +4,7 @@ import AppKit
 // MARK: - App Entry Point
 
 @main
-struct OpenSlickyApp: App {
+struct StatusLightApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var vm = ViewModel()
 
@@ -17,7 +17,7 @@ struct OpenSlickyApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("OpenSlicky", id: "main") {
+        Window("StatusLight", id: "main") {
             FullWindowView()
                 .environmentObject(vm)
         }
@@ -61,7 +61,7 @@ struct CustomPresetInfo: Codable, Identifiable {
     var id: String { name }
 }
 
-/// Decoded update status from `slicky update status` JSON output.
+/// Decoded update status from `statuslight update status` JSON output.
 struct UpdateStatusInfo: Codable {
     let current_version: String
     let latest_version: String?
@@ -70,7 +70,7 @@ struct UpdateStatusInfo: Codable {
     let download_url: String?
 }
 
-/// Decoded install result from `slicky update install` JSON output.
+/// Decoded install result from `statuslight update install` JSON output.
 struct InstallResultInfo: Codable {
     let status: String
     let version: String?
@@ -78,7 +78,7 @@ struct InstallResultInfo: Codable {
 }
 
 final class ViewModel: ObservableObject {
-    let cli = SlickyCLI()
+    let cli = StatusLightCLI()
 
     private enum SavedLightState {
         case preset(String)
@@ -377,7 +377,7 @@ final class ViewModel: ObservableObject {
 
     func restartApp() {
         guard let appURL = NSWorkspace.shared.urlForApplication(
-            withBundleIdentifier: Bundle.main.bundleIdentifier ?? "com.openslicky.app"
+            withBundleIdentifier: Bundle.main.bundleIdentifier ?? "com.statuslight.app"
         ) else {
             NSApp.terminate(nil)
             return
@@ -468,7 +468,7 @@ struct TranslocationWarningView: View {
             Text("Move to Applications")
                 .font(.headline)
 
-            Text("Please drag OpenSlicky to your Applications folder first, then open it from there.")
+            Text("Please drag StatusLight to your Applications folder first, then open it from there.")
                 .font(.callout)
                 .multilineTextAlignment(.center)
                 .foregroundColor(.secondary)
@@ -488,7 +488,7 @@ struct InstallerView: View {
                 .font(.system(size: 48))
                 .foregroundColor(.accentColor)
 
-            Text("Install OpenSlicky")
+            Text("Install StatusLight")
                 .font(.title3.bold())
 
             Text("v\(vm.cli.appVersion)")
@@ -496,7 +496,7 @@ struct InstallerView: View {
                 .foregroundColor(.secondary)
 
             VStack(alignment: .leading, spacing: 6) {
-                Label("Create CLI at /usr/local/bin/slicky", systemImage: "terminal")
+                Label("Create CLI at /usr/local/bin/statuslight", systemImage: "terminal")
                 Label("Start daemon on login", systemImage: "arrow.clockwise")
                 Label("Admin password required", systemImage: "lock.shield")
             }
@@ -538,7 +538,7 @@ struct MenuBarView: View {
                 IntensitySection()
             }
             Divider()
-            Text("OpenSlicky v\(vm.cli.appVersion)")
+            Text("StatusLight v\(vm.cli.appVersion)")
                 .font(.caption2)
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1385,7 +1385,7 @@ struct SettingsSection: View {
             Toggle("Show in Dock", isOn: $vm.showInDock)
                 .font(.caption)
                 .toggleStyle(.checkbox)
-                .help("Show OpenSlicky in the Dock in addition to the menu bar")
+                .help("Show StatusLight in the Dock in addition to the menu bar")
         }
     }
 }
@@ -1398,7 +1398,7 @@ struct FooterSection: View {
 
     var body: some View {
         HStack {
-            Text("OpenSlicky v\(vm.cli.appVersion)")
+            Text("StatusLight v\(vm.cli.appVersion)")
                 .font(.caption2)
                 .foregroundColor(.secondary)
 
@@ -1410,7 +1410,7 @@ struct FooterSection: View {
             .font(.caption2)
             .buttonStyle(.borderless)
             .foregroundColor(.red)
-            .alert("Uninstall OpenSlicky?", isPresented: $showUninstallConfirm) {
+            .alert("Uninstall StatusLight?", isPresented: $showUninstallConfirm) {
                 Button("Cancel", role: .cancel) {}
                 Button("Uninstall", role: .destructive) {
                     vm.uninstall()
