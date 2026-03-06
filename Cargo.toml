@@ -1,10 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/slicky-core",
-    "crates/slicky-cli",
-    "crates/slicky-daemon",
-    "crates/slicky-ffi",
+    "crates/statuslight-core",
+    "crates/statuslight-cli",
+    "crates/statuslight-daemon",
+    "crates/statuslight-ffi",
 ]
 
 [workspace.dependencies]
