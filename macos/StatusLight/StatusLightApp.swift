@@ -98,7 +98,13 @@ final class ViewModel: ObservableObject {
     }
 
     @Published var deviceConnected = false
-    @Published var deviceNames: [String] = []
+    @Published var devices: [StatusLightCLI.DeviceInfo] = []
+    /// Device IDs that the user has toggled off (excluded from color broadcasts).
+    @Published var disabledDevices: Set<String> = [] {
+        didSet {
+            UserDefaults.standard.set(Array(disabledDevices), forKey: "disabledDevices")
+        }
+    }
     @Published var slackConnected = false
     @Published var currentPreset: String? = nil
     @Published var isInstalled = false
@@ -158,6 +164,8 @@ final class ViewModel: ObservableObject {
         _autoSyncSlack = Published(initialValue: UserDefaults.standard.bool(forKey: "autoSyncSlack"))
         let savedIntensity = UserDefaults.standard.double(forKey: "lightIntensity")
         _intensity = Published(initialValue: savedIntensity > 0 ? savedIntensity : 1.0)
+        let savedDisabled = UserDefaults.standard.stringArray(forKey: "disabledDevices") ?? []
+        _disabledDevices = Published(initialValue: Set(savedDisabled))
         isInstalled = cli.isInstalled
         // Only spawn CLI processes if the binary is actually installed.
         if isInstalled {
@@ -184,16 +192,40 @@ final class ViewModel: ObservableObject {
         guard !isRefreshing else { return }
         isRefreshing = true
         refreshTask = Task { @MainActor in
-            let devices = await cli.getDevices()
+            let devs = await cli.getDevices()
             let slack = await cli.isSlackConnected()
             guard !Task.isCancelled else {
                 self.isRefreshing = false
                 return
             }
-            self.deviceNames = devices
-            self.deviceConnected = !devices.isEmpty
+            self.devices = devs
+            self.deviceConnected = !devs.isEmpty
             self.slackConnected = slack
             self.isRefreshing = false
+        }
+    }
+
+    // MARK: - Device Targeting
+
+    /// Returns serials of enabled devices. If all devices are enabled, returns
+    /// `[nil]` so a single broadcast command is sent instead of per-device calls.
+    var enabledTargets: [String?] {
+        let enabled = devices.filter { !disabledDevices.contains($0.id) }
+        if enabled.count == devices.count {
+            return [nil] // broadcast
+        }
+        return enabled.compactMap { $0.serial ?? nil }
+    }
+
+    func toggleDevice(_ device: StatusLightCLI.DeviceInfo) {
+        if disabledDevices.contains(device.id) {
+            disabledDevices.remove(device.id)
+        } else {
+            disabledDevices.insert(device.id)
+            // Turn off the newly disabled device.
+            if let serial = device.serial {
+                Task { let _ = await cli.off(deviceSerial: serial) }
+            }
         }
     }
 
@@ -212,19 +244,23 @@ final class ViewModel: ObservableObject {
         }
         pickerColor = presetColor
         Task {
-            let ok: Bool
-            if intensity < 1.0 {
-                let scaledHex = presetColor.scaledHex(intensity: intensity)
-                ok = await cli.setHex(scaledHex)
-            } else {
-                ok = await cli.set(preset: name)
+            var anyOk = false
+            for target in enabledTargets {
+                let ok: Bool
+                if intensity < 1.0 {
+                    let scaledHex = presetColor.scaledHex(intensity: intensity)
+                    ok = await cli.setHex(scaledHex, deviceSerial: target)
+                } else {
+                    ok = await cli.set(preset: name, deviceSerial: target)
+                }
+                if ok { anyOk = true }
             }
-            if !ok {
+            if !anyOk {
                 await MainActor.run {
                     self.currentPreset = nil
                 }
             }
-            if ok && autoSyncSlack && slackConnected {
+            if anyOk && autoSyncSlack && slackConnected {
                 await syncSlackStatus(for: name)
             }
         }
@@ -245,7 +281,9 @@ final class ViewModel: ObservableObject {
         currentPreset = nil
         isCustomColorActive = false
         Task {
-            let _ = await cli.off()
+            for target in enabledTargets {
+                let _ = await cli.off(deviceSerial: target)
+            }
             if autoSyncSlack && slackConnected {
                 let _ = await cli.slackClearStatus()
             }
@@ -274,7 +312,9 @@ final class ViewModel: ObservableObject {
         isCustomColorActive = true
         let hex = pickerColor.scaledHex(intensity: intensity)
         Task {
-            let _ = await cli.setHex(hex)
+            for target in enabledTargets {
+                let _ = await cli.setHex(hex, deviceSerial: target)
+            }
         }
     }
 
@@ -680,60 +720,109 @@ struct StatusSection: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Device list
+            if vm.devices.isEmpty {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                    Text("No devices detected")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                ForEach(vm.devices) { device in
+                    DeviceRow(device: device)
+                }
+            }
+
+            // Current state + controls
+            HStack(spacing: 8) {
+                if vm.isAnimating {
+                    Image(systemName: "waveform")
+                        .font(.caption)
+                    Text("Animating")
+                        .font(.caption)
+                } else if let preset = vm.currentPreset {
+                    Circle()
+                        .fill(colorForPreset(preset))
+                        .frame(width: 8, height: 8)
+                    Text(displayName(for: preset))
+                        .font(.caption)
+                } else if vm.isCustomColorActive {
+                    Circle()
+                        .fill(vm.pickerColor)
+                        .frame(width: 8, height: 8)
+                    Text(vm.pickerColor.toHex())
+                        .font(.caption)
+                } else {
+                    Text("Off")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Button(action: {
+                    if vm.isOn {
+                        vm.turnOff()
+                    } else {
+                        vm.turnOn()
+                    }
+                }) {
+                    Image(systemName: "power")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .disabled(!vm.isOn && !vm.canTurnOn)
+
+                Button(action: {
+                    openWindow(id: "main")
+                    NSApp.activate(ignoringOtherApps: true)
+                }) {
+                    Image(systemName: "gearshape")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+            }
+        }
+    }
+}
+
+// MARK: - Device Row
+
+struct DeviceRow: View {
+    @EnvironmentObject var vm: ViewModel
+    let device: StatusLightCLI.DeviceInfo
+
+    private var isEnabled: Bool {
+        !vm.disabledDevices.contains(device.id)
+    }
+
+    var body: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(vm.deviceConnected ? Color.green : Color.red)
+                .fill(isEnabled ? Color.green : Color.gray)
                 .frame(width: 8, height: 8)
-            Text(vm.deviceConnected ? vm.deviceNames.joined(separator: ", ") : "No device")
-                .font(.caption)
-                .foregroundColor(vm.deviceConnected ? .primary : .secondary)
-
-            Spacer()
-
-            if vm.isAnimating {
-                Image(systemName: "waveform")
+            VStack(alignment: .leading, spacing: 1) {
+                Text(device.name)
                     .font(.caption)
-                Text("Animating")
-                    .font(.caption)
-            } else if let preset = vm.currentPreset {
-                Circle()
-                    .fill(colorForPreset(preset))
-                    .frame(width: 8, height: 8)
-                Text(displayName(for: preset))
-                    .font(.caption)
-            } else if vm.isCustomColorActive {
-                Circle()
-                    .fill(vm.pickerColor)
-                    .frame(width: 8, height: 8)
-                Text(vm.pickerColor.toHex())
-                    .font(.caption)
-            } else {
-                Text("Off")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-
-            Button(action: {
-                if vm.isOn {
-                    vm.turnOff()
-                } else {
-                    vm.turnOn()
+                    .foregroundColor(isEnabled ? .primary : .secondary)
+                if let serial = device.serial {
+                    Text(serial)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
-            }) {
-                Image(systemName: "power")
             }
-            .buttonStyle(.bordered)
+            Spacer()
+            Toggle("", isOn: Binding(
+                get: { isEnabled },
+                set: { _ in vm.toggleDevice(device) }
+            ))
+            .toggleStyle(.switch)
             .controlSize(.mini)
-            .disabled(!vm.isOn && !vm.canTurnOn)
-
-            Button(action: {
-                openWindow(id: "main")
-                NSApp.activate(ignoringOtherApps: true)
-            }) {
-                Image(systemName: "gearshape")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.mini)
+            .labelsHidden()
         }
     }
 }

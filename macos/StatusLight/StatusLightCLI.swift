@@ -17,21 +17,30 @@ final class StatusLightCLI {
     // MARK: - Light Control
 
     /// Set light to a named preset (e.g. "red", "available", "in-meeting").
-    func set(preset: String) async -> Bool {
-        let (_, ok) = await run(["set", preset])
+    func set(preset: String, deviceSerial: String? = nil) async -> Bool {
+        var args = deviceArgs(deviceSerial) + ["set", preset]
+        let (_, ok) = await run(args)
         return ok
     }
 
     /// Set light to a hex color.
-    func setHex(_ hex: String) async -> Bool {
-        let (_, ok) = await run(["hex", hex])
+    func setHex(_ hex: String, deviceSerial: String? = nil) async -> Bool {
+        var args = deviceArgs(deviceSerial) + ["hex", hex]
+        let (_, ok) = await run(args)
         return ok
     }
 
     /// Turn the light off.
-    func off() async -> Bool {
-        let (_, ok) = await run(["off"])
+    func off(deviceSerial: String? = nil) async -> Bool {
+        var args = deviceArgs(deviceSerial) + ["off"]
+        let (_, ok) = await run(args)
         return ok
+    }
+
+    /// Build the `--device <serial>` prefix args.
+    private func deviceArgs(_ serial: String?) -> [String] {
+        if let s = serial { return ["--device", s] }
+        return []
     }
 
     // MARK: - Animation
@@ -80,25 +89,48 @@ final class StatusLightCLI {
 
     // MARK: - Devices
 
-    /// Query connected devices. Returns an array of device description strings.
-    func getDevices() async -> [String] {
+    /// A connected device's info parsed from CLI output.
+    struct DeviceInfo: Identifiable, Equatable {
+        let id: String  // serial or "device-N" fallback
+        let name: String
+        let driver: String
+        let serial: String?
+    }
+
+    /// Query connected devices with full info.
+    func getDevices() async -> [DeviceInfo] {
         let (output, ok) = await run(["devices"])
         guard ok else { return [] }
-        // Parse "Device N:" blocks — extract Product or Driver name from each.
-        var devices: [String] = []
-        var currentName: String?
+        var devices: [DeviceInfo] = []
+        var driver: String?
+        var serial: String?
+        var product: String?
+        var index = 0
         for line in output.split(separator: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("Device ") {
-                if let name = currentName { devices.append(name) }
-                currentName = nil
+                // Flush previous device.
+                if let d = driver {
+                    let name = product ?? d
+                    let id = serial ?? "device-\(index)"
+                    devices.append(DeviceInfo(id: id, name: name, driver: d, serial: serial))
+                    index += 1
+                }
+                driver = nil; serial = nil; product = nil
+            } else if trimmed.hasPrefix("Driver:") {
+                driver = String(trimmed.dropFirst("Driver:".count)).trimmingCharacters(in: .whitespaces)
+            } else if trimmed.hasPrefix("Serial:") {
+                serial = String(trimmed.dropFirst("Serial:".count)).trimmingCharacters(in: .whitespaces)
             } else if trimmed.hasPrefix("Product:") {
-                currentName = String(trimmed.dropFirst("Product:".count)).trimmingCharacters(in: .whitespaces)
-            } else if trimmed.hasPrefix("Driver:") && currentName == nil {
-                currentName = String(trimmed.dropFirst("Driver:".count)).trimmingCharacters(in: .whitespaces)
+                product = String(trimmed.dropFirst("Product:".count)).trimmingCharacters(in: .whitespaces)
             }
         }
-        if let name = currentName { devices.append(name) }
+        // Flush last device.
+        if let d = driver {
+            let name = product ?? d
+            let id = serial ?? "device-\(index)"
+            devices.append(DeviceInfo(id: id, name: name, driver: d, serial: serial))
+        }
         return devices
     }
 
