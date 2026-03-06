@@ -253,6 +253,10 @@ enum StartupAction {
 enum UpdateAction {
     /// Check for a newer version of OpenSlicky
     Check,
+    /// Show cached update status as JSON (no network, for macOS app)
+    Status,
+    /// Download and install the latest update
+    Install,
 }
 
 #[derive(Subcommand)]
@@ -474,6 +478,8 @@ fn main() -> Result<()> {
         },
         Commands::Update { action } => match action {
             UpdateAction::Check => update::check()?,
+            UpdateAction::Status => update::status()?,
+            UpdateAction::Install => update::install()?,
         },
         Commands::Status => {
             let devices = HidSlickyDevice::enumerate().context("failed to enumerate devices")?;

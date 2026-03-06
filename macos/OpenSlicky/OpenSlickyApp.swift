@@ -61,6 +61,22 @@ struct CustomPresetInfo: Codable, Identifiable {
     var id: String { name }
 }
 
+/// Decoded update status from `slicky update status` JSON output.
+struct UpdateStatusInfo: Codable {
+    let current_version: String
+    let latest_version: String?
+    let update_available: Bool
+    let last_check: String?
+    let download_url: String?
+}
+
+/// Decoded install result from `slicky update install` JSON output.
+struct InstallResultInfo: Codable {
+    let status: String
+    let version: String?
+    let error: String?
+}
+
 final class ViewModel: ObservableObject {
     let cli = SlickyCLI()
 
@@ -116,7 +132,15 @@ final class ViewModel: ObservableObject {
     // Custom presets
     @Published var customPresets: [CustomPresetInfo] = []
 
+    // Update state
+    @Published var updateAvailable = false
+    @Published var latestVersion: String?
+    @Published var isUpdating = false
+    @Published var updateError: String?
+    @Published var updateInstalled = false
+
     private var refreshTimer: Timer?
+    private var updateTimer: Timer?
     private var animationProcess: Process?
 
     init() {
@@ -127,6 +151,7 @@ final class ViewModel: ObservableObject {
         isInstalled = cli.isInstalled
         startPolling()
         loadCustomPresets()
+        startUpdateChecking()
     }
 
     func startPolling() {
@@ -271,6 +296,78 @@ final class ViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Update
+
+    func startUpdateChecking() {
+        checkForUpdates()
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 1800, repeats: true) { [weak self] _ in
+            self?.checkForUpdates()
+        }
+    }
+
+    func checkForUpdates() {
+        Task { @MainActor in
+            let (output, ok) = await cli.updateStatus()
+            guard ok else { return }
+            let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let data = trimmed.data(using: .utf8),
+                  let info = try? JSONDecoder().decode(UpdateStatusInfo.self, from: data) else {
+                return
+            }
+            self.updateAvailable = info.update_available
+            self.latestVersion = info.latest_version
+        }
+    }
+
+    func installUpdate() {
+        isUpdating = true
+        updateError = nil
+        Task { @MainActor in
+            let (output, _) = await cli.installUpdate()
+            let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if let data = trimmed.data(using: .utf8),
+               let result = try? JSONDecoder().decode(InstallResultInfo.self, from: data) {
+                if result.status == "installed" {
+                    self.updateInstalled = true
+                    self.updateAvailable = false
+                } else if result.status == "up_to_date" {
+                    self.updateAvailable = false
+                } else if result.error == "permission_denied" {
+                    // Fall back to admin-privileged install.
+                    let adminOk = cli.installUpdateAdmin()
+                    if adminOk {
+                        self.updateInstalled = true
+                        self.updateAvailable = false
+                    } else {
+                        self.updateError = "Installation cancelled"
+                    }
+                } else if let error = result.error {
+                    self.updateError = error
+                }
+            } else {
+                self.updateError = "Installation failed"
+            }
+            self.isUpdating = false
+        }
+    }
+
+    func restartApp() {
+        guard let appURL = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: Bundle.main.bundleIdentifier ?? "com.openslicky.app"
+        ) else {
+            NSApp.terminate(nil)
+            return
+        }
+        let config = NSWorkspace.OpenConfiguration()
+        config.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: appURL, configuration: config) { _, _ in
+            DispatchQueue.main.async {
+                NSApp.terminate(nil)
+            }
+        }
+    }
+
     // MARK: - Install / Uninstall
 
     func install() {
@@ -407,11 +504,14 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack(spacing: 16) {
+            UpdateBannerView()
             StatusSection()
-            Divider()
-            ColorGridSection()
-            Divider()
-            IntensitySection()
+            if vm.deviceConnected {
+                Divider()
+                ColorGridSection()
+                Divider()
+                IntensitySection()
+            }
             Divider()
             Text("OpenSlicky v\(vm.cli.appVersion)")
                 .font(.caption2)
@@ -430,6 +530,7 @@ struct FullWindowView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
+                UpdateBannerView()
                 StatusSection()
                 Divider()
                 ColorGridSection()
@@ -451,6 +552,79 @@ struct FullWindowView: View {
                 FooterSection()
             }
             .padding(16)
+        }
+    }
+}
+
+// MARK: - Update Banner
+
+struct UpdateBannerView: View {
+    @EnvironmentObject var vm: ViewModel
+
+    var body: some View {
+        if vm.updateInstalled {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.white)
+                Text("Update installed!")
+                    .font(.caption.bold())
+                    .foregroundColor(.white)
+                Spacer()
+                Button("Restart") {
+                    vm.restartApp()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .tint(.white)
+            }
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.green))
+        } else if let error = vm.updateError {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.white)
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                Spacer()
+                Button("Retry") {
+                    vm.installUpdate()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .tint(.white)
+            }
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.red))
+        } else if vm.isUpdating {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Downloading and installing...")
+                    .font(.caption)
+                    .foregroundColor(.white)
+                Spacer()
+            }
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.blue))
+        } else if vm.updateAvailable, let version = vm.latestVersion {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .foregroundColor(.white)
+                Text("Update Available: v\(version)")
+                    .font(.caption.bold())
+                    .foregroundColor(.white)
+                Spacer()
+                Button("Install Update") {
+                    vm.installUpdate()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+                .tint(.white)
+            }
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.blue))
         }
     }
 }
@@ -1018,21 +1192,7 @@ struct SlackSetupWizard: View {
             Spacer()
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Bot Token")
-                    .font(.caption.bold())
-                    .foregroundColor(.secondary)
-                TextField("xoxb-...", text: $botToken)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.body, design: .monospaced))
-                if !botToken.isEmpty && !botToken.hasPrefix("xoxb-") {
-                    Text("Token must start with xoxb-")
-                        .font(.caption)
-                        .foregroundColor(.red)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("User Token")
+                Text("User OAuth Token")
                     .font(.caption.bold())
                     .foregroundColor(.secondary)
                 TextField("xoxp-...", text: $userToken)
@@ -1040,6 +1200,20 @@ struct SlackSetupWizard: View {
                     .font(.system(.body, design: .monospaced))
                 if !userToken.isEmpty && !userToken.hasPrefix("xoxp-") {
                     Text("Token must start with xoxp-")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Bot User OAuth Token")
+                    .font(.caption.bold())
+                    .foregroundColor(.secondary)
+                TextField("xoxb-...", text: $botToken)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.body, design: .monospaced))
+                if !botToken.isEmpty && !botToken.hasPrefix("xoxb-") {
+                    Text("Token must start with xoxb-")
                         .font(.caption)
                         .foregroundColor(.red)
                 }
@@ -1079,8 +1253,8 @@ struct SlackSetupWizard: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     tokenSummaryRow("App Token", token: appToken, prefix: "xapp-")
-                    tokenSummaryRow("Bot Token", token: botToken, prefix: "xoxb-")
-                    tokenSummaryRow("User Token", token: userToken, prefix: "xoxp-")
+                    tokenSummaryRow("User OAuth", token: userToken, prefix: "xoxp-")
+                    tokenSummaryRow("Bot OAuth", token: botToken, prefix: "xoxb-")
                 }
                 .padding(12)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.gray.opacity(0.1)))

@@ -145,6 +145,25 @@ final class SlickyCLI {
         return ok
     }
 
+    // MARK: - Update
+
+    /// Query cached update status (local-only, no network). Returns (JSON output, success).
+    func updateStatus() async -> (String, Bool) {
+        return await run(["update", "status"])
+    }
+
+    /// Download and install the latest update. Returns (JSON output, success).
+    func installUpdate() async -> (String, Bool) {
+        return await run(["update", "install"])
+    }
+
+    /// Install update with admin privileges (fallback when normal install fails due to permissions).
+    func installUpdateAdmin() -> Bool {
+        let macosDir = URL(fileURLWithPath: binaryPath).deletingLastPathComponent().path
+        let script = "'\(macosDir)/slicky' update install"
+        return runOsascriptAdmin(script)
+    }
+
     // MARK: - Install / Uninstall (admin)
 
     /// Create symlinks in /usr/local/bin (requires admin).

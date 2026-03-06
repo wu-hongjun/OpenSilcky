@@ -6,7 +6,7 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
-use slicky_core::{AnimationType, Color, HidSlickyDevice, SlackRule, SlickyDevice};
+use slicky_core::{AnimationType, Color, HidSlickyDevice, Preset, SlackRule, SlickyDevice};
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::state::AppState;
@@ -49,6 +49,8 @@ pub async fn start_socket_mode(state: &AppState) {
         None => return,
     };
     let rules = slack.rules.clone();
+    let user_id = slack.user_id.clone();
+    let emoji_colors = slack.emoji_colors.clone();
     let state_clone = state.clone();
 
     let handle = tokio::spawn(async move {
@@ -57,7 +59,16 @@ pub async fn start_socket_mode(state: &AppState) {
         let max_backoff = Duration::from_secs(60);
 
         loop {
-            match run_socket_loop(&client, &app_token, &rules, &state_clone).await {
+            match run_socket_loop(
+                &client,
+                &app_token,
+                &rules,
+                user_id.as_deref(),
+                &emoji_colors,
+                &state_clone,
+            )
+            .await
+            {
                 Ok(()) => {
                     log::info!("Socket Mode connection closed normally");
                     backoff = Duration::from_secs(1);
@@ -79,6 +90,8 @@ async fn run_socket_loop(
     client: &reqwest::Client,
     app_token: &str,
     rules: &[SlackRule],
+    user_id: Option<&str>,
+    emoji_colors: &HashMap<String, String>,
     state: &AppState,
 ) -> anyhow::Result<()> {
     let url = get_ws_url(client, app_token).await?;
@@ -104,7 +117,7 @@ async fn run_socket_loop(
                     // Dispatch event.
                     if envelope["type"].as_str() == Some("events_api") {
                         if let Some(event) = envelope.get("payload").and_then(|p| p.get("event")) {
-                            handle_event(event, rules, state).await;
+                            handle_event(event, rules, user_id, emoji_colors, state).await;
                         }
                     }
                 }
@@ -136,8 +149,24 @@ pub async fn stop_socket_mode(state: &AppState) {
 ///
 /// Slack sends `type = "message"` with `channel_type = "im"` for DMs.
 /// We normalize this to `message.im` so rules can use `event = "message.im"`.
-async fn handle_event(event: &serde_json::Value, rules: &[SlackRule], state: &AppState) {
+///
+/// `user_change` events are handled separately: we extract the status emoji
+/// from the user's profile and map it to a color via `emoji_colors`.
+async fn handle_event(
+    event: &serde_json::Value,
+    rules: &[SlackRule],
+    user_id: Option<&str>,
+    emoji_colors: &HashMap<String, String>,
+    state: &AppState,
+) {
     let raw_type = event["type"].as_str().unwrap_or("");
+
+    // Handle user_change events for bidirectional status sync.
+    if raw_type == "user_change" {
+        handle_user_change(event, user_id, emoji_colors, state).await;
+        return;
+    }
+
     let event_subtype = event["subtype"].as_str();
 
     // Skip bot messages to avoid echo loops.
@@ -161,6 +190,73 @@ async fn handle_event(event: &serde_json::Value, rules: &[SlackRule], state: &Ap
             log::info!("Rule '{}' matched event '{event_type}'", rule.name);
             trigger_animation(rule, state).await;
             return;
+        }
+    }
+}
+
+/// Handle a `user_change` event: sync the user's Slack status emoji to the light.
+///
+/// Skips if the event is for a different user, or if an event animation is active.
+async fn handle_user_change(
+    event: &serde_json::Value,
+    user_id: Option<&str>,
+    emoji_colors: &HashMap<String, String>,
+    state: &AppState,
+) {
+    let our_uid = match user_id {
+        Some(id) => id,
+        None => {
+            log::warn!("user_change: skipping — user_id not resolved (auth.test may have failed at startup)");
+            return;
+        }
+    };
+
+    // user_change fires for ALL users — filter to our own.
+    let changed_uid = event["user"]["id"].as_str().unwrap_or("");
+    if changed_uid != our_uid {
+        return;
+    }
+
+    // Don't overwrite an in-progress event animation.
+    if state.inner.event_animation_active.load(Ordering::SeqCst) {
+        return;
+    }
+
+    let profile = &event["user"]["profile"];
+    let emoji = match profile["status_emoji"].as_str() {
+        Some(e) if !e.is_empty() => e,
+        _ => {
+            log::debug!("user_change: no status emoji set");
+            return;
+        }
+    };
+
+    // Check if the status has expired.
+    if let Some(exp) = profile["status_expiration"].as_i64() {
+        if exp > 0 {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64;
+            if exp < now {
+                log::debug!("user_change: status emoji expired");
+                return;
+            }
+        }
+    }
+
+    match emoji_colors.get(emoji) {
+        Some(hex) => match Color::from_hex(hex) {
+            Ok(color) => {
+                log::info!("user_change: status emoji {emoji} → {hex}");
+                set_device_color(state, color).await;
+            }
+            Err(e) => {
+                log::warn!("user_change: invalid color {hex} for {emoji}: {e}");
+            }
+        },
+        None => {
+            log::debug!("user_change: no color mapping for {emoji}");
         }
     }
 }
@@ -305,7 +401,19 @@ pub async fn start_emoji_poll(state: &AppState) {
                         set_device_color(&state_clone, color).await;
                     }
                     Ok(None) => {
-                        log::debug!("Emoji poll: no matching status emoji");
+                        // No emoji match — fall back to presence-based color.
+                        log::debug!("Emoji poll: no matching status emoji, checking presence");
+                        match fetch_presence(&client, &user_token).await {
+                            Ok(Some(color)) => {
+                                set_device_color(&state_clone, color).await;
+                            }
+                            Ok(None) => {
+                                log::debug!("Presence poll: no presence data");
+                            }
+                            Err(e) => {
+                                log::warn!("Presence poll error: {e}");
+                            }
+                        }
                     }
                     Err(e) => {
                         log::warn!("Emoji poll error: {e}");
@@ -370,6 +478,75 @@ async fn fetch_emoji_color(
         Some(hex) => Ok(Some(Color::from_hex(hex)?)),
         None => Ok(None),
     }
+}
+
+/// Fetch the authenticated user's Slack presence and map it to a color.
+///
+/// `"away"` → `Preset::Away` color, `"active"` → `Preset::Available` color.
+async fn fetch_presence(client: &reqwest::Client, token: &str) -> anyhow::Result<Option<Color>> {
+    let resp: serde_json::Value = client
+        .get("https://slack.com/api/users.getPresence")
+        .bearer_auth(token)
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    if !resp["ok"].as_bool().unwrap_or(false) {
+        let err_msg = resp["error"].as_str().unwrap_or("unknown error");
+        anyhow::bail!("Slack API error: {err_msg}");
+    }
+
+    match resp["presence"].as_str() {
+        Some("away") => Ok(Some(Preset::Away.color())),
+        Some("active") => Ok(Some(Preset::Available.color())),
+        _ => Ok(None),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// (E) User identity resolution
+// ---------------------------------------------------------------------------
+
+/// Resolve the authenticated user's Slack ID by calling `auth.test` with
+/// the user token.  The returned ID is used to filter `user_change` events
+/// (which fire for *every* user in the workspace).
+pub async fn resolve_user_id(state: &AppState) -> Option<String> {
+    let token = {
+        let slack = state.inner.slack.lock().await;
+        slack.user_token.clone()?
+    };
+
+    let client = reqwest::Client::new();
+    let resp: serde_json::Value = match client
+        .post("https://slack.com/api/auth.test")
+        .bearer_auth(&token)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .send()
+        .await
+    {
+        Ok(r) => match r.json().await {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!("Failed to parse auth.test response: {e}");
+                return None;
+            }
+        },
+        Err(e) => {
+            log::warn!("Failed to call auth.test: {e}");
+            return None;
+        }
+    };
+
+    if !resp["ok"].as_bool().unwrap_or(false) {
+        log::warn!(
+            "auth.test failed: {}",
+            resp["error"].as_str().unwrap_or("unknown")
+        );
+        return None;
+    }
+
+    resp["user_id"].as_str().map(String::from)
 }
 
 // ---------------------------------------------------------------------------

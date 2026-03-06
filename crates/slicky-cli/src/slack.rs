@@ -27,12 +27,15 @@ fn manifest_json() -> String {
                 "user": [
                     "users.profile:read",
                     "users.profile:write",
+                    "users:read",
                     "im:read",
                     "im:history"
                 ],
                 "bot": [
+                    "app_mentions:read",
                     "im:read",
-                    "im:history"
+                    "im:history",
+                    "users:read"
                 ]
             }
         },
@@ -40,7 +43,7 @@ fn manifest_json() -> String {
             "socket_mode_enabled": true,
             "event_subscriptions": {
                 "user_events": ["message.im"],
-                "bot_events": ["app_mention"]
+                "bot_events": ["app_mention", "user_change"]
             },
             "org_deploy_enabled": false,
             "token_rotation_enabled": false
@@ -140,19 +143,19 @@ pub fn setup() -> Result<()> {
         "Expected xapp- prefix for app-level token"
     );
 
-    // Step 3: Install and copy bot + user tokens.
+    // Step 3: Install and copy OAuth tokens.
     println!("\nStep 3: Install the app and copy tokens");
     println!("  Go to Install App > Install to Workspace");
     println!("  Then copy both tokens from the Install App page.");
-    let bot_token = prompt("  Bot Token (xoxb-...): ")?;
-    ensure!(
-        bot_token.starts_with("xoxb-"),
-        "Expected xoxb- prefix for bot token"
-    );
-    let user_token = prompt("  User Token (xoxp-...): ")?;
+    let user_token = prompt("  User OAuth Token (xoxp-...): ")?;
     ensure!(
         user_token.starts_with("xoxp-"),
-        "Expected xoxp- prefix for user token"
+        "Expected xoxp- prefix for User OAuth Token"
+    );
+    let bot_token = prompt("  Bot User OAuth Token (xoxb-...): ")?;
+    ensure!(
+        bot_token.starts_with("xoxb-"),
+        "Expected xoxb- prefix for Bot User OAuth Token"
     );
 
     // Step 4: Validate and save.
@@ -235,12 +238,12 @@ pub fn status() -> Result<()> {
             if has_app { "configured" } else { "missing" }
         );
         println!(
-            "  Bot token:  {}",
-            if has_bot { "configured" } else { "missing" }
+            "  User OAuth Token:     {}",
+            if has_user { "configured" } else { "missing" }
         );
         println!(
-            "  User token: {}",
-            if has_user { "configured" } else { "missing" }
+            "  Bot User OAuth Token: {}",
+            if has_bot { "configured" } else { "missing" }
         );
         println!(
             "  Events:     {}",

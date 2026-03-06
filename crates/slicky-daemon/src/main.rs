@@ -74,6 +74,12 @@ async fn main() -> Result<()> {
         slack_state.rules = config.slack.rules;
     }
 
+    // Resolve the authenticated user's Slack ID (needed for user_change filtering).
+    if let Some(uid) = slack::resolve_user_id(&state).await {
+        log::info!("Resolved Slack user ID: {uid}");
+        state.inner.slack.lock().await.user_id = Some(uid);
+    }
+
     // Start Slack tasks based on available tokens.
     let has_app = app_token.is_some();
     let has_user = user_token.is_some();

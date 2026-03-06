@@ -41,6 +41,8 @@ pub struct SlackState {
     pub user_token: Option<String>,
     /// Emoji-to-color mappings (emoji → hex color string).
     pub emoji_colors: HashMap<String, String>,
+    /// The authenticated user's Slack ID (for filtering `user_change` events).
+    pub user_id: Option<String>,
     /// Event-driven animation rules.
     pub rules: Vec<SlackRule>,
     /// Handle to the Socket Mode WebSocket task, if running.
@@ -62,6 +64,7 @@ impl AppState {
                     bot_token: None,
                     user_token: None,
                     emoji_colors: HashMap::new(),
+                    user_id: None,
                     rules: Vec::new(),
                     socket_handle: None,
                     emoji_poll_handle: None,
