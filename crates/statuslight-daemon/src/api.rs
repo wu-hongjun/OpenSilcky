@@ -498,6 +498,25 @@ async fn post_slack_configure(
         }
     }
 
+    // Persist tokens to the encrypted store (if any were provided).
+    {
+        let mut tokens_to_store = std::collections::HashMap::new();
+        if let Some(ref token) = req.app_token {
+            tokens_to_store.insert("slack_app_token".to_string(), token.clone());
+        }
+        if let Some(ref token) = req.bot_token {
+            tokens_to_store.insert("slack_bot_token".to_string(), token.clone());
+        }
+        if let Some(ref token) = req.user_token {
+            tokens_to_store.insert("slack_user_token".to_string(), token.clone());
+        }
+        if !tokens_to_store.is_empty() {
+            if let Err(e) = crate::token_store::store_tokens(&tokens_to_store) {
+                log::warn!("Failed to store tokens in encrypted store: {e}");
+            }
+        }
+    }
+
     let mut slack_state = state.inner.slack.lock().await;
 
     if let Some(token) = req.app_token {

@@ -1,6 +1,7 @@
 mod api;
 mod slack;
 mod state;
+mod token_store;
 mod update;
 
 use std::path::PathBuf;
@@ -23,8 +24,8 @@ struct Args {
     #[arg(long, default_value = "/tmp/statuslight.sock")]
     socket: PathBuf,
 
-    /// Slack app-level token for Socket Mode (overrides config).
-    #[arg(long)]
+    /// Slack app-level token for Socket Mode (deprecated: use /slack/configure API).
+    #[arg(long, hide = true)]
     slack_app_token: Option<String>,
 
     /// Enable TCP API on this port (overrides config).
@@ -40,6 +41,13 @@ struct Args {
 async fn main() -> Result<()> {
     env_logger::init();
     let args = Args::parse();
+
+    if args.slack_app_token.is_some() {
+        log::warn!(
+            "--slack-app-token is deprecated; use the /slack/configure API endpoint instead. \
+             Tokens passed via CLI are visible in process lists and shell history."
+        );
+    }
 
     // Remove stale socket file if it exists.
     if args.socket.exists() {
@@ -92,10 +100,14 @@ async fn main() -> Result<()> {
         log::info!("{} device(s) opened at startup", devices_guard.len());
     }
 
-    // Configure Slack state from config (CLI arg overrides config for app_token).
-    let app_token = args.slack_app_token.or(config.slack.app_token);
-    let bot_token = config.slack.bot_token;
-    let user_token = config.slack.user_token;
+    // Configure Slack state from config. Encrypted token store takes priority over TOML config;
+    // CLI --slack-app-token (deprecated) takes highest priority for app_token.
+    let app_token = args
+        .slack_app_token
+        .or_else(|| crate::token_store::load_token("slack_app_token"))
+        .or(config.slack.app_token);
+    let bot_token = crate::token_store::load_token("slack_bot_token").or(config.slack.bot_token);
+    let user_token = crate::token_store::load_token("slack_user_token").or(config.slack.user_token);
 
     // Build emoji_colors map — config stores hex strings directly.
     let emoji_colors = config.slack.emoji_colors;
