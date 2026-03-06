@@ -105,12 +105,11 @@ final class SlickyCLI {
         return ok
     }
 
-    /// Non-interactive Slack token configuration. Returns (output, success).
+    /// Non-interactive Slack token configuration via stdin. Returns (output, success).
+    /// Tokens are piped via stdin to avoid exposing them in process arguments.
     func configureSlack(appToken: String, botToken: String, userToken: String) async -> (String, Bool) {
-        return await run(["slack", "configure",
-                          "--app-token", appToken,
-                          "--bot-token", botToken,
-                          "--user-token", userToken])
+        let input = "\(appToken)\n\(botToken)\n\(userToken)\n"
+        return await runWithStdin(["slack", "configure", "--stdin"], input: input)
     }
 
     /// Disconnect Slack (clears all tokens).
@@ -159,7 +158,7 @@ final class SlickyCLI {
 
     /// Install update with admin privileges (fallback when normal install fails due to permissions).
     func installUpdateAdmin() -> Bool {
-        let macosDir = URL(fileURLWithPath: binaryPath).deletingLastPathComponent().path
+        let macosDir = shellEscape(URL(fileURLWithPath: binaryPath).deletingLastPathComponent().path)
         let script = "'\(macosDir)/slicky' update install"
         return runOsascriptAdmin(script)
     }
@@ -168,7 +167,7 @@ final class SlickyCLI {
 
     /// Create symlinks in /usr/local/bin (requires admin).
     func installSymlinks() -> Bool {
-        let macosDir = URL(fileURLWithPath: binaryPath).deletingLastPathComponent().path
+        let macosDir = shellEscape(URL(fileURLWithPath: binaryPath).deletingLastPathComponent().path)
         let script = "mkdir -p /usr/local/bin && ln -sf '\(macosDir)/slicky' /usr/local/bin/slicky && ln -sf '\(macosDir)/slickyd' /usr/local/bin/slickyd"
         return runOsascriptAdmin(script)
     }
@@ -176,7 +175,7 @@ final class SlickyCLI {
     /// Remove symlinks and app bundle (requires admin).
     /// Single admin prompt handles symlinks + app removal.
     func removeSymlinksAndApp() -> Bool {
-        let appPath = Bundle.main.bundlePath
+        let appPath = shellEscape(Bundle.main.bundlePath)
         let script = "rm -f /usr/local/bin/slicky /usr/local/bin/slickyd && rm -rf '\(appPath)'"
         return runOsascriptAdmin(script)
     }
@@ -266,6 +265,42 @@ final class SlickyCLI {
 
     // MARK: - Private Helpers
 
+    /// Run the CLI binary with the given arguments, piping input to stdin.
+    private func runWithStdin(_ arguments: [String], input: String) async -> (String, Bool) {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async { [binaryPath] in
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: binaryPath)
+                process.arguments = arguments
+
+                let outPipe = Pipe()
+                process.standardOutput = outPipe
+                process.standardError = outPipe
+
+                let inPipe = Pipe()
+                process.standardInput = inPipe
+
+                do {
+                    try process.run()
+                    // Write tokens to stdin and close.
+                    if let data = input.data(using: .utf8) {
+                        inPipe.fileHandleForWriting.write(data)
+                    }
+                    inPipe.fileHandleForWriting.closeFile()
+                    process.waitUntilExit()
+                } catch {
+                    continuation.resume(returning: ("", false))
+                    return
+                }
+
+                let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: data, encoding: .utf8) ?? ""
+                let ok = process.terminationStatus == 0
+                continuation.resume(returning: (output, ok))
+            }
+        }
+    }
+
     /// Run the CLI binary with the given arguments and return (stdout, success).
     private func run(_ arguments: [String]) async -> (String, Bool) {
         await withCheckedContinuation { continuation in
@@ -292,6 +327,11 @@ final class SlickyCLI {
                 continuation.resume(returning: (output, ok))
             }
         }
+    }
+
+    /// Escape a path for use inside single-quoted shell strings.
+    private func shellEscape(_ path: String) -> String {
+        path.replacingOccurrences(of: "'", with: "'\\''")
     }
 
     /// Run a shell command with administrator privileges via osascript.

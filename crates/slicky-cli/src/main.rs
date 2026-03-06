@@ -213,14 +213,17 @@ enum SlackAction {
     /// Non-interactive token configuration (for macOS app)
     Configure {
         /// App-level token (xapp-...)
-        #[arg(long)]
-        app_token: String,
+        #[arg(long, required_unless_present = "stdin")]
+        app_token: Option<String>,
         /// Bot token (xoxb-...)
-        #[arg(long)]
-        bot_token: String,
+        #[arg(long, required_unless_present = "stdin")]
+        bot_token: Option<String>,
         /// User token (xoxp-...)
+        #[arg(long, required_unless_present = "stdin")]
+        user_token: Option<String>,
+        /// Read tokens from stdin (one per line: app, bot, user)
         #[arg(long)]
-        user_token: String,
+        stdin: bool,
     },
     /// Remove Slack credentials
     Disconnect,
@@ -465,7 +468,19 @@ fn main() -> Result<()> {
                 app_token,
                 bot_token,
                 user_token,
-            } => slack::configure(&app_token, &bot_token, &user_token)?,
+                stdin,
+            } => {
+                if stdin {
+                    slack::configure_from_stdin()?;
+                } else {
+                    // unwrap is safe: clap ensures these are present when --stdin is absent
+                    slack::configure(
+                        &app_token.unwrap(),
+                        &bot_token.unwrap(),
+                        &user_token.unwrap(),
+                    )?;
+                }
+            }
             SlackAction::Disconnect => slack::disconnect()?,
             SlackAction::Status => slack::status()?,
             SlackAction::SetStatus { text, emoji } => slack::set_status(&text, &emoji)?,

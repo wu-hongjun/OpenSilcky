@@ -142,6 +142,7 @@ final class ViewModel: ObservableObject {
     private var refreshTimer: Timer?
     private var updateTimer: Timer?
     private var animationProcess: Process?
+    private var refreshTask: Task<Void, Never>?
 
     init() {
         _showInDock = Published(initialValue: UserDefaults.standard.bool(forKey: "showInDock"))
@@ -154,6 +155,11 @@ final class ViewModel: ObservableObject {
         startUpdateChecking()
     }
 
+    deinit {
+        refreshTimer?.invalidate()
+        updateTimer?.invalidate()
+    }
+
     func startPolling() {
         refresh()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
@@ -162,9 +168,11 @@ final class ViewModel: ObservableObject {
     }
 
     func refresh() {
-        Task { @MainActor in
+        refreshTask?.cancel()
+        refreshTask = Task { @MainActor in
             let dev = await cli.isDeviceConnected()
             let slack = await cli.isSlackConnected()
+            guard !Task.isCancelled else { return }
             self.deviceConnected = dev
             self.slackConnected = slack
         }
@@ -185,13 +193,19 @@ final class ViewModel: ObservableObject {
         }
         pickerColor = presetColor
         Task {
+            let ok: Bool
             if intensity < 1.0 {
                 let scaledHex = presetColor.scaledHex(intensity: intensity)
-                let _ = await cli.setHex(scaledHex)
+                ok = await cli.setHex(scaledHex)
             } else {
-                let _ = await cli.set(preset: name)
+                ok = await cli.set(preset: name)
             }
-            if autoSyncSlack && slackConnected {
+            if !ok {
+                await MainActor.run {
+                    self.currentPreset = nil
+                }
+            }
+            if ok && autoSyncSlack && slackConnected {
                 await syncSlackStatus(for: name)
             }
         }
@@ -276,8 +290,10 @@ final class ViewModel: ObservableObject {
 
     func disconnectSlack() {
         Task { @MainActor in
-            let _ = await cli.slackDisconnect()
-            slackConnected = false
+            let ok = await cli.slackDisconnect()
+            if ok {
+                slackConnected = false
+            }
         }
     }
 
@@ -334,14 +350,21 @@ final class ViewModel: ObservableObject {
                 } else if result.status == "up_to_date" {
                     self.updateAvailable = false
                 } else if result.error == "permission_denied" {
-                    // Fall back to admin-privileged install.
-                    let adminOk = cli.installUpdateAdmin()
-                    if adminOk {
-                        self.updateInstalled = true
-                        self.updateAvailable = false
-                    } else {
-                        self.updateError = "Installation cancelled"
+                    // Fall back to admin-privileged install (off MainActor).
+                    let cli = self.cli
+                    Task.detached {
+                        let adminOk = cli.installUpdateAdmin()
+                        await MainActor.run {
+                            if adminOk {
+                                self.updateInstalled = true
+                                self.updateAvailable = false
+                            } else {
+                                self.updateError = "Installation cancelled"
+                            }
+                            self.isUpdating = false
+                        }
                     }
+                    return
                 } else if let error = result.error {
                     self.updateError = error
                 }
@@ -372,14 +395,16 @@ final class ViewModel: ObservableObject {
 
     func install() {
         isInstalling = true
-        Task { @MainActor in
+        Task.detached { [cli] in
             let ok = cli.installSymlinks()
             if ok {
                 let _ = await cli.startupEnable()
                 cli.writeMarker()
-                isInstalled = true
             }
-            isInstalling = false
+            await MainActor.run {
+                if ok { self.isInstalled = true }
+                self.isInstalling = false
+            }
         }
     }
 
@@ -831,6 +856,15 @@ struct IntensitySection: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Slider(value: $vm.intensity, in: 0.05...1.0, step: 0.05)
+                    .onChange(of: vm.intensity) { _ in
+                        if vm.currentPreset != nil {
+                            if let name = vm.currentPreset {
+                                vm.setPreset(name)
+                            }
+                        } else if vm.isCustomColorActive {
+                            vm.setPickerColor()
+                        }
+                    }
                 Image(systemName: "sun.max")
                     .font(.caption)
                     .foregroundColor(.secondary)

@@ -40,6 +40,9 @@ async fn get_ws_url(client: &reqwest::Client, app_token: &str) -> anyhow::Result
 /// Start the Socket Mode WebSocket connection in a background task.
 ///
 /// The task reconnects automatically with exponential backoff on disconnection.
+/// Only `app_token` is captured at spawn time (needed for WebSocket URL);
+/// `rules`, `user_id`, and `emoji_colors` are read from `state.inner.slack`
+/// on each event so that config changes take effect without restarting.
 pub async fn start_socket_mode(state: &AppState) {
     stop_socket_mode(state).await;
 
@@ -48,9 +51,6 @@ pub async fn start_socket_mode(state: &AppState) {
         Some(t) => t.clone(),
         None => return,
     };
-    let rules = slack.rules.clone();
-    let user_id = slack.user_id.clone();
-    let emoji_colors = slack.emoji_colors.clone();
     let state_clone = state.clone();
 
     let handle = tokio::spawn(async move {
@@ -59,16 +59,7 @@ pub async fn start_socket_mode(state: &AppState) {
         let max_backoff = Duration::from_secs(60);
 
         loop {
-            match run_socket_loop(
-                &client,
-                &app_token,
-                &rules,
-                user_id.as_deref(),
-                &emoji_colors,
-                &state_clone,
-            )
-            .await
-            {
+            match run_socket_loop(&client, &app_token, &state_clone).await {
                 Ok(()) => {
                     log::info!("Socket Mode connection closed normally");
                     backoff = Duration::from_secs(1);
@@ -77,6 +68,10 @@ pub async fn start_socket_mode(state: &AppState) {
                     log::warn!("Socket Mode error: {e}, reconnecting in {backoff:?}");
                 }
             }
+            state_clone
+                .inner
+                .socket_mode_connected
+                .store(false, Ordering::SeqCst);
             tokio::time::sleep(backoff).await;
             backoff = (backoff * 2).min(max_backoff);
         }
@@ -86,12 +81,12 @@ pub async fn start_socket_mode(state: &AppState) {
 }
 
 /// Run a single Socket Mode WebSocket session. Returns when the connection drops.
+///
+/// `rules`, `user_id`, and `emoji_colors` are read from shared state on each
+/// event so that configuration changes take effect without restarting.
 async fn run_socket_loop(
     client: &reqwest::Client,
     app_token: &str,
-    rules: &[SlackRule],
-    user_id: Option<&str>,
-    emoji_colors: &HashMap<String, String>,
     state: &AppState,
 ) -> anyhow::Result<()> {
     let url = get_ws_url(client, app_token).await?;
@@ -102,6 +97,10 @@ async fn run_socket_loop(
     let (ws_stream, _) = tokio_tungstenite::connect_async(&url).await?;
     let (mut write, mut read) = ws_stream.split();
     log::info!("Socket Mode connected");
+    state
+        .inner
+        .socket_mode_connected
+        .store(true, Ordering::SeqCst);
 
     while let Some(msg) = read.next().await {
         let msg = msg?;
@@ -114,10 +113,10 @@ async fn run_socket_loop(
                         write.send(Message::Text(ack.to_string())).await?;
                     }
 
-                    // Dispatch event.
+                    // Dispatch event — read rules/user_id/emoji_colors from state.
                     if envelope["type"].as_str() == Some("events_api") {
                         if let Some(event) = envelope.get("payload").and_then(|p| p.get("event")) {
-                            handle_event(event, rules, user_id, emoji_colors, state).await;
+                            handle_event(event, state).await;
                         }
                     }
                 }
@@ -130,6 +129,10 @@ async fn run_socket_loop(
         }
     }
 
+    state
+        .inner
+        .socket_mode_connected
+        .store(false, Ordering::SeqCst);
     Ok(())
 }
 
@@ -152,18 +155,19 @@ pub async fn stop_socket_mode(state: &AppState) {
 ///
 /// `user_change` events are handled separately: we extract the status emoji
 /// from the user's profile and map it to a color via `emoji_colors`.
-async fn handle_event(
-    event: &serde_json::Value,
-    rules: &[SlackRule],
-    user_id: Option<&str>,
-    emoji_colors: &HashMap<String, String>,
-    state: &AppState,
-) {
+///
+/// All config (`rules`, `user_id`, `emoji_colors`) is read from shared state
+/// per event so that changes take effect without restarting.
+async fn handle_event(event: &serde_json::Value, state: &AppState) {
     let raw_type = event["type"].as_str().unwrap_or("");
 
     // Handle user_change events for bidirectional status sync.
     if raw_type == "user_change" {
-        handle_user_change(event, user_id, emoji_colors, state).await;
+        let slack = state.inner.slack.lock().await;
+        let user_id = slack.user_id.clone();
+        let emoji_colors = slack.emoji_colors.clone();
+        drop(slack);
+        handle_user_change(event, user_id.as_deref(), &emoji_colors, state).await;
         return;
     }
 
@@ -185,7 +189,8 @@ async fn handle_event(
         raw_type.to_string()
     };
 
-    for rule in rules {
+    let rules = state.inner.slack.lock().await.rules.clone();
+    for rule in &rules {
         if rule_matches(rule, &event_type, event) {
             log::info!("Rule '{}' matched event '{event_type}'", rule.name);
             trigger_animation(rule, state).await;
@@ -197,6 +202,8 @@ async fn handle_event(
 /// Handle a `user_change` event: sync the user's Slack status emoji to the light.
 ///
 /// Skips if the event is for a different user, or if an event animation is active.
+/// Clears `manual_override` when the user explicitly changes their Slack status,
+/// since they want Slack-driven sync to take effect.
 async fn handle_user_change(
     event: &serde_json::Value,
     user_id: Option<&str>,
@@ -216,6 +223,10 @@ async fn handle_user_change(
     if changed_uid != our_uid {
         return;
     }
+
+    // User explicitly changed their Slack status — clear manual override so
+    // Slack-driven sync takes effect again.
+    state.inner.manual_override.store(false, Ordering::SeqCst);
 
     // Don't overwrite an in-progress event animation.
     if state.inner.event_animation_active.load(Ordering::SeqCst) {
@@ -330,19 +341,24 @@ async fn trigger_animation(rule: &SlackRule, state: &AppState) {
     let state_clone = state.clone();
     let handle = tokio::spawn(async move {
         let start = Instant::now();
+        let mut last_frame = color;
         while start.elapsed().as_secs_f64() < duration {
             let frame = anim.frame(start.elapsed().as_secs_f64(), speed, &[color]);
+            last_frame = frame;
             set_device_color(&state_clone, frame).await;
             tokio::time::sleep(Duration::from_millis(33)).await;
         }
 
-        // Restore previous color.
+        // Restore previous color only if no other source changed it during animation.
         state_clone
             .inner
             .event_animation_active
             .store(false, Ordering::SeqCst);
-        if let Some(c) = prev_color {
-            set_device_color(&state_clone, c).await;
+        let current = *state_clone.inner.current_color.lock().await;
+        if current == Some(last_frame) {
+            if let Some(c) = prev_color {
+                set_device_color(&state_clone, c).await;
+            }
         }
     });
 
@@ -375,48 +391,62 @@ async fn set_device_color(state: &AppState, color: Color) {
 /// Start the background emoji polling task (60s interval).
 ///
 /// Uses the user_token to read the profile emoji and maps it to a color via
-/// the `emoji_colors` config. Skips when an event animation is active.
+/// the `emoji_colors` config. Skips when an event animation is active or when
+/// the user has manually set a color (`manual_override`).
+///
+/// `user_token` and `emoji_colors` are read from shared state on each
+/// iteration so that config changes take effect without restarting.
 pub async fn start_emoji_poll(state: &AppState) {
     stop_emoji_poll(state).await;
 
-    let mut slack = state.inner.slack.lock().await;
-    let user_token = match &slack.user_token {
-        Some(t) => t.clone(),
-        None => return,
-    };
-    let emoji_colors = slack.emoji_colors.clone();
+    let slack = state.inner.slack.lock().await;
+    if slack.user_token.is_none() {
+        return;
+    }
+    drop(slack);
+
     let state_clone = state.clone();
 
     let handle = tokio::spawn(async move {
         let client = reqwest::Client::new();
         loop {
-            // Skip if an event animation is playing.
-            if !state_clone
+            // Skip if an event animation is playing or manual override is set.
+            let skip = state_clone
                 .inner
                 .event_animation_active
                 .load(Ordering::SeqCst)
-            {
-                match fetch_emoji_color(&client, &user_token, &emoji_colors).await {
-                    Ok(Some(color)) => {
-                        set_device_color(&state_clone, color).await;
-                    }
-                    Ok(None) => {
-                        // No emoji match — fall back to presence-based color.
-                        log::debug!("Emoji poll: no matching status emoji, checking presence");
-                        match fetch_presence(&client, &user_token).await {
-                            Ok(Some(color)) => {
-                                set_device_color(&state_clone, color).await;
-                            }
-                            Ok(None) => {
-                                log::debug!("Presence poll: no presence data");
-                            }
-                            Err(e) => {
-                                log::warn!("Presence poll error: {e}");
+                || state_clone.inner.manual_override.load(Ordering::SeqCst);
+
+            if !skip {
+                // Read current config from shared state each iteration.
+                let slack = state_clone.inner.slack.lock().await;
+                let user_token = slack.user_token.clone();
+                let emoji_colors = slack.emoji_colors.clone();
+                drop(slack);
+
+                if let Some(ref token) = user_token {
+                    match fetch_emoji_color(&client, token, &emoji_colors).await {
+                        Ok(Some(color)) => {
+                            set_device_color(&state_clone, color).await;
+                        }
+                        Ok(None) => {
+                            // No emoji match — fall back to presence-based color.
+                            log::debug!("Emoji poll: no matching status emoji, checking presence");
+                            match fetch_presence(&client, token).await {
+                                Ok(Some(color)) => {
+                                    set_device_color(&state_clone, color).await;
+                                }
+                                Ok(None) => {
+                                    log::debug!("Presence poll: no presence data");
+                                }
+                                Err(e) => {
+                                    log::warn!("Presence poll error: {e}");
+                                }
                             }
                         }
-                    }
-                    Err(e) => {
-                        log::warn!("Emoji poll error: {e}");
+                        Err(e) => {
+                            log::warn!("Emoji poll error: {e}");
+                        }
                     }
                 }
             }
@@ -424,6 +454,7 @@ pub async fn start_emoji_poll(state: &AppState) {
         }
     });
 
+    let mut slack = state.inner.slack.lock().await;
     slack.emoji_poll_handle = Some(handle);
 }
 
@@ -563,6 +594,10 @@ pub async fn stop_all(state: &AppState) {
     state
         .inner
         .event_animation_active
+        .store(false, Ordering::SeqCst);
+    state
+        .inner
+        .socket_mode_connected
         .store(false, Ordering::SeqCst);
     let mut slack = state.inner.slack.lock().await;
     slack.enabled = false;

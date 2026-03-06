@@ -170,6 +170,13 @@ async fn try_set_color(
 
     drop(device_guard);
     *state.inner.current_color.lock().await = Some(color);
+
+    // Mark manual override so background Slack polling doesn't overwrite.
+    state
+        .inner
+        .manual_override
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
     Ok(())
 }
 
@@ -199,9 +206,24 @@ async fn post_color(
     State(state): State<AppState>,
     Json(req): Json<ColorRequest>,
 ) -> Result<Json<SetColorResponse>, (StatusCode, Json<ErrorResponse>)> {
-    // Try as hex first, then as preset name.
+    // Try as hex first, then as preset name (with config overrides), then custom presets.
     let color = Color::from_hex(&req.color)
-        .or_else(|_| Preset::from_name(&req.color).map(|p| p.color()))
+        .or_else(|_| {
+            let config = slicky_core::Config::load().unwrap_or_default();
+            // Check built-in presets with color overrides.
+            Preset::from_name(&req.color)
+                .map(|p| p.color_with_overrides(&config.colors))
+                .or_else(|_| {
+                    // Check custom presets.
+                    config
+                        .custom_presets
+                        .iter()
+                        .find(|cp| cp.name == req.color)
+                        .map(|cp| Color::from_hex(&cp.color))
+                        .transpose()?
+                        .ok_or_else(|| SlickyError::UnknownPreset(req.color.clone()))
+                })
+        })
         .map_err(map_slicky_error)?;
 
     try_set_color(&state, color).await?;
@@ -258,12 +280,16 @@ async fn get_devices() -> Result<Json<Vec<DeviceEntry>>, (StatusCode, Json<Error
 
 async fn get_slack_status(State(state): State<AppState>) -> impl IntoResponse {
     let slack = state.inner.slack.lock().await;
+    let connected = state
+        .inner
+        .socket_mode_connected
+        .load(std::sync::atomic::Ordering::SeqCst);
     Json(SlackStatusResponse {
         enabled: slack.enabled,
         has_app_token: slack.app_token.is_some(),
         has_bot_token: slack.bot_token.is_some(),
         has_user_token: slack.user_token.is_some(),
-        socket_connected: slack.socket_handle.is_some(),
+        socket_connected: connected,
         rules_count: slack.rules.len(),
         emoji_map: slack.emoji_colors.clone(),
     })
@@ -273,6 +299,120 @@ async fn post_slack_configure(
     State(state): State<AppState>,
     Json(req): Json<SlackConfigureRequest>,
 ) -> Result<Json<SlackConfigureResponse>, (StatusCode, Json<ErrorResponse>)> {
+    // Validate tokens before storing.
+    let client = reqwest::Client::new();
+    if let Some(ref token) = req.user_token {
+        let resp: serde_json::Value = client
+            .post("https://slack.com/api/auth.test")
+            .bearer_auth(token)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .send()
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::BAD_GATEWAY,
+                    Json(ErrorResponse {
+                        error: format!("failed to validate user token: {e}"),
+                    }),
+                )
+            })?
+            .json()
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::BAD_GATEWAY,
+                    Json(ErrorResponse {
+                        error: format!("failed to parse auth.test response: {e}"),
+                    }),
+                )
+            })?;
+        if !resp["ok"].as_bool().unwrap_or(false) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: format!(
+                        "invalid user token: {}",
+                        resp["error"].as_str().unwrap_or("unknown error")
+                    ),
+                }),
+            ));
+        }
+    }
+    if let Some(ref token) = req.bot_token {
+        let resp: serde_json::Value = client
+            .post("https://slack.com/api/auth.test")
+            .bearer_auth(token)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .send()
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::BAD_GATEWAY,
+                    Json(ErrorResponse {
+                        error: format!("failed to validate bot token: {e}"),
+                    }),
+                )
+            })?
+            .json()
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::BAD_GATEWAY,
+                    Json(ErrorResponse {
+                        error: format!("failed to parse auth.test response: {e}"),
+                    }),
+                )
+            })?;
+        if !resp["ok"].as_bool().unwrap_or(false) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: format!(
+                        "invalid bot token: {}",
+                        resp["error"].as_str().unwrap_or("unknown error")
+                    ),
+                }),
+            ));
+        }
+    }
+    if let Some(ref token) = req.app_token {
+        let resp: serde_json::Value = client
+            .post("https://slack.com/api/apps.connections.open")
+            .bearer_auth(token)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .send()
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::BAD_GATEWAY,
+                    Json(ErrorResponse {
+                        error: format!("failed to validate app token: {e}"),
+                    }),
+                )
+            })?
+            .json()
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::BAD_GATEWAY,
+                    Json(ErrorResponse {
+                        error: format!("failed to parse connections.open response: {e}"),
+                    }),
+                )
+            })?;
+        if !resp["ok"].as_bool().unwrap_or(false) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: format!(
+                        "invalid app token: {}",
+                        resp["error"].as_str().unwrap_or("unknown error")
+                    ),
+                }),
+            ));
+        }
+    }
+
     let mut slack_state = state.inner.slack.lock().await;
 
     if let Some(token) = req.app_token {
@@ -307,6 +447,12 @@ async fn post_slack_configure(
     if slack_state.enabled {
         drop(slack_state);
         slack::stop_all(&state).await;
+
+        // Re-resolve user_id with (potentially new) token.
+        if let Some(uid) = slack::resolve_user_id(&state).await {
+            state.inner.slack.lock().await.user_id = Some(uid);
+        }
+
         // Re-start based on available tokens.
         let slack_state = state.inner.slack.lock().await;
         let has_app = slack_state.app_token.is_some();
@@ -340,6 +486,12 @@ async fn post_slack_enable(
             }),
         ));
     }
+
+    // Clear manual override when Slack is (re-)enabled.
+    state
+        .inner
+        .manual_override
+        .store(false, std::sync::atomic::Ordering::SeqCst);
 
     if has_app {
         slack::start_socket_mode(&state).await;

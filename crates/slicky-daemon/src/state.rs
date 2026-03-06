@@ -27,6 +27,11 @@ pub struct AppStateInner {
     pub event_animation_active: AtomicBool,
     /// Handle to the currently running event animation task, if any.
     pub event_animation_handle: Mutex<Option<JoinHandle<()>>>,
+    /// When true, background Slack polling should not overwrite the device color.
+    /// Set by manual API color changes, cleared by Slack-driven color changes.
+    pub manual_override: AtomicBool,
+    /// Whether the Socket Mode WebSocket is currently connected.
+    pub socket_mode_connected: AtomicBool,
 }
 
 /// Slack configuration and runtime state.
@@ -71,6 +76,8 @@ impl AppState {
                 }),
                 event_animation_active: AtomicBool::new(false),
                 event_animation_handle: Mutex::new(None),
+                manual_override: AtomicBool::new(false),
+                socket_mode_connected: AtomicBool::new(false),
             }),
         }
     }

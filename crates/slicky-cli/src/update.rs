@@ -183,36 +183,18 @@ pub fn install() -> Result<()> {
         return Ok(());
     }
 
-    // Copy new app from mounted volume.
+    // Copy new app from mounted volume using atomic swap with rollback.
     let source_app = format!("{mount_point}/OpenSlicky.app");
     let dest_app = "/Applications/OpenSlicky.app";
+    let backup_app = "/Applications/OpenSlicky.app.bak";
+    let staging_app = "/Applications/OpenSlicky.app.new";
 
-    // Remove existing app.
-    let rm_status = Command::new("rm")
-        .args(["-rf", dest_app])
-        .status()
-        .context("failed to remove existing app")?;
-
-    if !rm_status.success() {
-        // Unmount and clean up before reporting error.
-        let _ = Command::new("hdiutil")
-            .args(["detach", &mount_point, "-quiet"])
-            .status();
-        let _ = std::fs::remove_file(&dmg_path);
-        let result = InstallResult {
-            status: "error".into(),
-            version: Some(version_str),
-            error: Some("permission_denied".into()),
-        };
-        println!("{}", serde_json::to_string(&result)?);
-        return Ok(());
-    }
-
-    // Copy new app.
+    // 1. Copy new app to staging location.
+    let _ = Command::new("rm").args(["-rf", staging_app]).status();
     let cp_status = Command::new("cp")
-        .args(["-R", &source_app, dest_app])
+        .args(["-R", &source_app, staging_app])
         .status()
-        .context("failed to copy new app")?;
+        .context("failed to copy new app to staging")?;
 
     if !cp_status.success() {
         let _ = Command::new("hdiutil")
@@ -227,6 +209,46 @@ pub fn install() -> Result<()> {
         println!("{}", serde_json::to_string(&result)?);
         return Ok(());
     }
+
+    // 2. Rename existing app to backup.
+    let dest_exists = std::path::Path::new(dest_app).exists();
+    if dest_exists && std::fs::rename(dest_app, backup_app).is_err() {
+        // rename failed — clean up staging and report.
+        let _ = Command::new("rm").args(["-rf", staging_app]).status();
+        let _ = Command::new("hdiutil")
+            .args(["detach", &mount_point, "-quiet"])
+            .status();
+        let _ = std::fs::remove_file(&dmg_path);
+        let result = InstallResult {
+            status: "error".into(),
+            version: Some(version_str),
+            error: Some("permission_denied".into()),
+        };
+        println!("{}", serde_json::to_string(&result)?);
+        return Ok(());
+    }
+
+    // 3. Rename staging to final destination.
+    if std::fs::rename(staging_app, dest_app).is_err() {
+        // Restore backup if we moved the original.
+        if dest_exists {
+            let _ = std::fs::rename(backup_app, dest_app);
+        }
+        let _ = Command::new("hdiutil")
+            .args(["detach", &mount_point, "-quiet"])
+            .status();
+        let _ = std::fs::remove_file(&dmg_path);
+        let result = InstallResult {
+            status: "error".into(),
+            version: Some(version_str),
+            error: Some("permission_denied".into()),
+        };
+        println!("{}", serde_json::to_string(&result)?);
+        return Ok(());
+    }
+
+    // 4. Remove backup (best effort).
+    let _ = Command::new("rm").args(["-rf", backup_app]).status();
 
     // Unmount and clean up.
     let _ = Command::new("hdiutil")
@@ -328,7 +350,7 @@ mod tests {
     fn current_version_is_valid_semver() {
         let v = current_version().expect("should parse CARGO_PKG_VERSION");
         // Should match the version in Cargo.toml.
-        assert_eq!(v, Version::new(0, 1, 4));
+        assert_eq!(v, Version::new(0, 1, 5));
     }
 
     #[test]

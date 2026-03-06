@@ -65,6 +65,26 @@ impl DeviceProxy {
             Self::Direct(dev) => dev.off().context("failed to turn off"),
         }
     }
+
+    /// Send a POST request to the daemon (only works in Daemon mode).
+    /// Returns the response body on success.
+    pub fn post(&self, path: &str, body: &str) -> Result<String> {
+        match self {
+            Self::Daemon => {
+                let resp = http_post(DAEMON_SOCKET, path, body)?;
+                if !resp.status_ok {
+                    bail!("daemon error: {}", resp.body);
+                }
+                Ok(resp.body)
+            }
+            Self::Direct(_) => bail!("daemon not running"),
+        }
+    }
+
+    /// Returns true if the daemon socket exists (daemon likely running).
+    pub fn daemon_running() -> bool {
+        Path::new(DAEMON_SOCKET).exists()
+    }
 }
 
 /// Minimal HTTP response parsed from raw bytes.

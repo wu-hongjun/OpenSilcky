@@ -3,11 +3,13 @@
 //! Uses a per-user Slack app model: users create their own app from a manifest
 //! and paste three tokens (app, bot, user) via a guided wizard.
 
-use std::io::{self, Write};
+use std::io::{self, BufRead, Write};
 use std::process::Command;
 
 use anyhow::{bail, ensure, Context, Result};
 use slicky_core::Config;
+
+use crate::daemon_client::DeviceProxy;
 
 /// The Slack app manifest JSON for Status Light.
 fn manifest_json() -> String {
@@ -85,6 +87,27 @@ pub fn open_setup() -> Result<()> {
     Ok(())
 }
 
+/// `slicky slack configure --stdin` — reads tokens from stdin (one per line).
+///
+/// Avoids exposing tokens in process arguments visible via `ps`.
+pub fn configure_from_stdin() -> Result<()> {
+    let stdin = io::stdin();
+    let mut lines = Vec::new();
+    for line in stdin.lock().lines() {
+        let line = line.context("failed to read from stdin")?;
+        let trimmed = line.trim().to_string();
+        if !trimmed.is_empty() {
+            lines.push(trimmed);
+        }
+    }
+    ensure!(
+        lines.len() == 3,
+        "expected 3 tokens from stdin (app, bot, user), got {}",
+        lines.len()
+    );
+    configure(&lines[0], &lines[1], &lines[2])
+}
+
 /// `slicky slack configure` — non-interactive token setup (for macOS app).
 ///
 /// Validates tokens and saves to config. Prints JSON result for machine parsing.
@@ -107,6 +130,9 @@ pub fn configure(app_token: &str, bot_token: &str, user_token: &str) -> Result<(
     validate_app_token(app_token)?;
 
     save_tokens(app_token, bot_token, user_token)?;
+
+    // Notify the running daemon (non-fatal if daemon isn't running).
+    notify_daemon_configure(app_token, bot_token, user_token);
 
     println!("{{\"status\":\"configured\"}}");
     Ok(())
@@ -166,7 +192,10 @@ pub fn setup() -> Result<()> {
 
     save_tokens(&app_token, &bot_token, &user_token)?;
 
-    println!("\nSetup complete! Restart the daemon to enable Socket Mode.");
+    // Notify the running daemon (non-fatal if daemon isn't running).
+    notify_daemon_configure(&app_token, &bot_token, &user_token);
+
+    println!("\nSetup complete! Changes applied.");
     Ok(())
 }
 
@@ -219,7 +248,15 @@ pub fn disconnect() -> Result<()> {
     config.slack.user_token = None;
     config.slack.events_enabled = false;
     config.save()?;
-    println!("Slack tokens removed. Restart the daemon to take effect.");
+
+    // Notify the running daemon to stop Slack tasks.
+    if DeviceProxy::daemon_running() {
+        if let Ok(proxy) = DeviceProxy::open() {
+            let _ = proxy.post("/slack/disable", "{}");
+        }
+    }
+
+    println!("Slack tokens removed. Changes applied.");
     Ok(())
 }
 
@@ -360,6 +397,23 @@ fn validate_app_token(token: &str) -> Result<()> {
 
     println!("  app token valid (Socket Mode ready)");
     Ok(())
+}
+
+/// Try to notify the running daemon about new Slack tokens.
+/// Non-fatal if the daemon isn't running.
+fn notify_daemon_configure(app_token: &str, bot_token: &str, user_token: &str) {
+    if !DeviceProxy::daemon_running() {
+        return;
+    }
+    if let Ok(proxy) = DeviceProxy::open() {
+        let body = serde_json::json!({
+            "app_token": app_token,
+            "bot_token": bot_token,
+            "user_token": user_token,
+        });
+        let _ = proxy.post("/slack/configure", &body.to_string());
+        let _ = proxy.post("/slack/enable", "{}");
+    }
 }
 
 /// Default emoji-to-color hex mappings.
