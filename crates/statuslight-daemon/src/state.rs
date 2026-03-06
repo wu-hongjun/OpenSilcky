@@ -1,7 +1,7 @@
 //! Shared application state for the StatusLight daemon.
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU8};
 use std::sync::Arc;
 
 use statuslight_core::{Color, SlackRule, StatusLightDevice};
@@ -16,11 +16,13 @@ pub struct AppState {
 
 /// The inner state protected by `Arc`.
 pub struct AppStateInner {
-    /// The device handle. `Option` allows starting without a connected device.
+    /// All open device handles. Empty if no devices are connected.
     /// `Mutex` because `HidDevice` is `Send` but not `Sync`.
-    pub device: Mutex<Option<Box<dyn StatusLightDevice>>>,
+    pub devices: Mutex<Vec<Box<dyn StatusLightDevice>>>,
     /// The last color set on the device.
     pub current_color: Mutex<Option<Color>>,
+    /// Global brightness level (0–100).
+    pub brightness: AtomicU8,
     /// Slack integration state.
     pub slack: Mutex<SlackState>,
     /// When true, the emoji poller should not overwrite the device color.
@@ -61,8 +63,9 @@ impl AppState {
     pub fn new() -> Self {
         Self {
             inner: Arc::new(AppStateInner {
-                device: Mutex::new(None),
+                devices: Mutex::new(Vec::new()),
                 current_color: Mutex::new(None),
+                brightness: AtomicU8::new(100),
                 slack: Mutex::new(SlackState {
                     enabled: false,
                     app_token: None,

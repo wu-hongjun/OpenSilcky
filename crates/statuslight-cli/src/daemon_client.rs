@@ -21,49 +21,115 @@ const SOCKET_TIMEOUT: Duration = Duration::from_secs(5);
 /// A device proxy that transparently routes to the daemon or direct HID.
 pub enum DeviceProxy {
     /// Route commands through the daemon's Unix socket.
-    Daemon,
-    /// Direct device access (no daemon running).
+    Daemon {
+        /// Optional serial filter for `?device=` query param.
+        device_serial: Option<String>,
+    },
+    /// Direct device access (no daemon running) — single device.
     Direct(Box<dyn StatusLightDevice>),
+    /// Direct device access — multiple devices.
+    DirectMulti(Vec<Box<dyn StatusLightDevice>>),
 }
 
 impl DeviceProxy {
     /// Try to connect to the daemon socket first; fall back to direct HID.
-    pub fn open() -> Result<Self> {
+    ///
+    /// - `all`: if true, open all devices in direct mode
+    /// - `device_serial`: target a specific device by serial
+    pub fn open(all: bool, device_serial: Option<&str>) -> Result<Self> {
         if Path::new(DAEMON_SOCKET).exists() {
-            return Ok(Self::Daemon);
+            return Ok(Self::Daemon {
+                device_serial: device_serial.map(String::from),
+            });
         }
-        let device = DeviceRegistry::with_builtins()
-            .open_any()
-            .context("failed to open device (no daemon running)")?;
-        Ok(Self::Direct(device))
+
+        let registry = DeviceRegistry::with_builtins();
+
+        if all {
+            let all_devices = registry.enumerate_all();
+            if all_devices.is_empty() {
+                bail!("no devices found");
+            }
+            let mut devices = Vec::new();
+            for (driver_id, info) in &all_devices {
+                match registry.open(driver_id, info.serial.as_deref()) {
+                    Ok(dev) => devices.push(dev),
+                    Err(e) => {
+                        log::warn!("Failed to open device (driver={driver_id}): {e}");
+                    }
+                }
+            }
+            if devices.is_empty() {
+                bail!("failed to open any device");
+            }
+            Ok(Self::DirectMulti(devices))
+        } else if let Some(serial) = device_serial {
+            // Find which driver owns this serial.
+            let all_devices = registry.enumerate_all();
+            let (driver_id, _) = all_devices
+                .iter()
+                .find(|(_, info)| info.serial.as_deref() == Some(serial))
+                .context("no device with that serial")?;
+            let device = registry.open(driver_id, Some(serial))?;
+            Ok(Self::Direct(device))
+        } else {
+            let device = registry
+                .open_any()
+                .context("failed to open device (no daemon running)")?;
+            Ok(Self::Direct(device))
+        }
     }
 
     /// Set the device to the given color.
     pub fn set_color(&self, color: Color) -> Result<()> {
         match self {
-            Self::Daemon => {
+            Self::Daemon { device_serial } => {
                 let body = format!(r#"{{"r":{},"g":{},"b":{}}}"#, color.r, color.g, color.b);
-                let resp = http_post(DAEMON_SOCKET, "/rgb", &body)?;
+                let path = match device_serial {
+                    Some(s) => format!("/rgb?device={s}"),
+                    None => "/rgb".to_string(),
+                };
+                let resp = http_post(DAEMON_SOCKET, &path, &body)?;
                 if !resp.status_ok {
                     bail!("daemon error: {}", resp.body);
                 }
                 Ok(())
             }
             Self::Direct(dev) => dev.set_color(color).context("failed to set color"),
+            Self::DirectMulti(devs) => {
+                for dev in devs {
+                    if let Err(e) = dev.set_color(color) {
+                        log::warn!("Device {} failed: {e}", dev.driver_name());
+                    }
+                }
+                Ok(())
+            }
         }
     }
 
     /// Turn the device off.
     pub fn off(&self) -> Result<()> {
         match self {
-            Self::Daemon => {
-                let resp = http_post(DAEMON_SOCKET, "/off", "")?;
+            Self::Daemon { device_serial } => {
+                let path = match device_serial {
+                    Some(s) => format!("/off?device={s}"),
+                    None => "/off".to_string(),
+                };
+                let resp = http_post(DAEMON_SOCKET, &path, "")?;
                 if !resp.status_ok {
                     bail!("daemon error: {}", resp.body);
                 }
                 Ok(())
             }
             Self::Direct(dev) => dev.off().context("failed to turn off"),
+            Self::DirectMulti(devs) => {
+                for dev in devs {
+                    if let Err(e) = dev.off() {
+                        log::warn!("Device {} failed: {e}", dev.driver_name());
+                    }
+                }
+                Ok(())
+            }
         }
     }
 
@@ -71,14 +137,14 @@ impl DeviceProxy {
     /// Returns the response body on success.
     pub fn post(&self, path: &str, body: &str) -> Result<String> {
         match self {
-            Self::Daemon => {
+            Self::Daemon { .. } => {
                 let resp = http_post(DAEMON_SOCKET, path, body)?;
                 if !resp.status_ok {
                     bail!("daemon error: {}", resp.body);
                 }
                 Ok(resp.body)
             }
-            Self::Direct(_) => bail!("daemon not running"),
+            Self::Direct(_) | Self::DirectMulti(_) => bail!("daemon not running"),
         }
     }
 

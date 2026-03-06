@@ -14,6 +14,18 @@ use statuslight_core::{AnimationType, Color, Config, DeviceRegistry, Preset};
 #[derive(Parser)]
 #[command(name = "statuslight", version, about = "Control your USB status light")]
 struct Cli {
+    /// Target all connected devices (direct HID mode only).
+    #[arg(long, global = true)]
+    all: bool,
+
+    /// Target a specific device by serial number.
+    #[arg(long, global = true)]
+    device: Option<String>,
+
+    /// Override global brightness (0-100).
+    #[arg(long, global = true)]
+    brightness: Option<u8>,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -31,7 +43,11 @@ enum Commands {
     /// List all available preset names and their colors
     Presets,
     /// List connected status light devices
-    Devices,
+    Devices {
+        /// Show VID, PID, and driver details.
+        #[arg(short, long)]
+        verbose: bool,
+    },
     /// Play an animation on the light (blocking, Ctrl-C to stop)
     Animate {
         #[command(subcommand)]
@@ -268,18 +284,31 @@ fn main() -> Result<()> {
     env_logger::init();
     let cli = Cli::parse();
 
+    // Load config once for brightness (may be overridden by --brightness flag).
+    let config = Config::load()?;
+    let brightness_val = cli.brightness.unwrap_or(config.brightness).min(100);
+    let brightness_factor = brightness_val as f64 / 100.0;
+
+    /// Apply brightness scaling to a color.
+    fn apply_brightness(color: Color, factor: f64) -> Color {
+        if (factor - 1.0).abs() < f64::EPSILON {
+            color
+        } else {
+            color.scale_brightness(factor)
+        }
+    }
+
     match cli.command {
         Commands::Set { name } => {
             // Try built-in preset first (with config overrides), then custom presets.
             if let Ok(preset) = Preset::from_name(&name) {
-                let config = Config::load()?;
                 let color = preset.color_with_overrides(&config.colors);
-                let device = DeviceProxy::open()?;
-                device.set_color(color).context("failed to set color")?;
+                let scaled = apply_brightness(color, brightness_factor);
+                let device = DeviceProxy::open(cli.all, cli.device.as_deref())?;
+                device.set_color(scaled).context("failed to set color")?;
                 println!("Set to {} ({})", preset.name(), color);
             } else {
                 // Check custom presets.
-                let config = Config::load()?;
                 let lower = name.to_lowercase();
                 if let Some(cp) = config
                     .custom_presets
@@ -293,10 +322,11 @@ fn main() -> Result<()> {
                     if let Some(ref anim_name) = cp.animation {
                         let anim = AnimationType::from_name(anim_name)
                             .ok_or_else(|| anyhow::anyhow!("unknown animation: {anim_name}"))?;
-                        animate::run(anim, &[color], cp.speed, 1.0)?;
+                        animate::run(anim, &[color], cp.speed, brightness_factor)?;
                     } else {
-                        let device = DeviceProxy::open()?;
-                        device.set_color(color).context("failed to set color")?;
+                        let scaled = apply_brightness(color, brightness_factor);
+                        let device = DeviceProxy::open(cli.all, cli.device.as_deref())?;
+                        device.set_color(scaled).context("failed to set color")?;
                         println!("Set to {} ({})", cp.name, color);
                     }
                 } else {
@@ -306,18 +336,20 @@ fn main() -> Result<()> {
         }
         Commands::Rgb { r, g, b } => {
             let color = Color::new(r, g, b);
-            let device = DeviceProxy::open()?;
-            device.set_color(color).context("failed to set color")?;
+            let scaled = apply_brightness(color, brightness_factor);
+            let device = DeviceProxy::open(cli.all, cli.device.as_deref())?;
+            device.set_color(scaled).context("failed to set color")?;
             println!("Set to RGB({}, {}, {}) {}", r, g, b, color);
         }
         Commands::Hex { color: hex } => {
             let color = Color::from_hex(&hex).context("failed to parse hex color")?;
-            let device = DeviceProxy::open()?;
-            device.set_color(color).context("failed to set color")?;
+            let scaled = apply_brightness(color, brightness_factor);
+            let device = DeviceProxy::open(cli.all, cli.device.as_deref())?;
+            device.set_color(scaled).context("failed to set color")?;
             println!("Set to {color}");
         }
         Commands::Off => {
-            let device = DeviceProxy::open()?;
+            let device = DeviceProxy::open(cli.all, cli.device.as_deref())?;
             device.off().context("failed to turn off")?;
             println!("Light off");
         }
@@ -342,7 +374,7 @@ fn main() -> Result<()> {
                 }
             }
         }
-        Commands::Devices => {
+        Commands::Devices { verbose } => {
             let registry = DeviceRegistry::with_builtins();
             let devices = registry.enumerate_all();
             if devices.is_empty() {
@@ -359,6 +391,10 @@ fn main() -> Result<()> {
                     }
                     if let Some(ref p) = d.product {
                         println!("  Product:      {p}");
+                    }
+                    if verbose {
+                        println!("  VID:          0x{:04x}", d.vid);
+                        println!("  PID:          0x{:04x}", d.pid);
                     }
                 }
             }

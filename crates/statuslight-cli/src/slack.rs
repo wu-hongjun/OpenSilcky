@@ -251,7 +251,7 @@ pub fn disconnect() -> Result<()> {
 
     // Notify the running daemon to stop Slack tasks.
     if DeviceProxy::daemon_running() {
-        if let Ok(proxy) = DeviceProxy::open() {
+        if let Ok(proxy) = DeviceProxy::open(false, None) {
             let _ = proxy.post("/slack/disable", "{}");
         }
     }
@@ -405,7 +405,7 @@ fn notify_daemon_configure(app_token: &str, bot_token: &str, user_token: &str) {
     if !DeviceProxy::daemon_running() {
         return;
     }
-    if let Ok(proxy) = DeviceProxy::open() {
+    if let Ok(proxy) = DeviceProxy::open(false, None) {
         let body = serde_json::json!({
             "app_token": app_token,
             "bot_token": bot_token,

@@ -4,6 +4,7 @@ mod state;
 mod update;
 
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -25,6 +26,14 @@ struct Args {
     /// Slack app-level token for Socket Mode (overrides config).
     #[arg(long)]
     slack_app_token: Option<String>,
+
+    /// Enable TCP API on this port (overrides config).
+    #[arg(long)]
+    tcp_port: Option<u16>,
+
+    /// TCP bind address (default: 127.0.0.1).
+    #[arg(long)]
+    tcp_bind: Option<String>,
 }
 
 #[tokio::main]
@@ -40,23 +49,48 @@ async fn main() -> Result<()> {
 
     let state = AppState::new();
 
-    // Try to open any device at startup (non-fatal if not found).
-    let registry = statuslight_core::DeviceRegistry::with_builtins();
-    match registry.open_any() {
-        Ok(dev) => {
-            log::info!("Device found at startup: {}", dev.driver_name());
-            *state.inner.device.lock().await = Some(dev);
-        }
-        Err(e) => {
-            log::warn!("No device at startup (will retry on requests): {e}");
-        }
-    }
-
     // Load config.
     let config = statuslight_core::Config::load().unwrap_or_else(|e| {
         log::warn!("Failed to load config, using defaults: {e}");
         statuslight_core::Config::default()
     });
+
+    // Set brightness from config.
+    state
+        .inner
+        .brightness
+        .store(config.brightness.min(100), Ordering::SeqCst);
+
+    // Enumerate and open all devices at startup.
+    let registry = statuslight_core::DeviceRegistry::with_builtins();
+    let all_devices = registry.enumerate_all();
+    if all_devices.is_empty() {
+        log::warn!("No devices at startup (will retry on requests)");
+    } else {
+        let mut devices_guard = state.inner.devices.lock().await;
+        for (driver_id, info) in &all_devices {
+            let serial = info.serial.as_deref();
+            match registry.open(driver_id, serial) {
+                Ok(dev) => {
+                    log::info!(
+                        "Opened device: {} (driver={}, serial={:?})",
+                        dev.driver_name(),
+                        driver_id,
+                        serial
+                    );
+                    devices_guard.push(dev);
+                }
+                Err(e) => {
+                    log::warn!(
+                        "Failed to open device (driver={}, serial={:?}): {e}",
+                        driver_id,
+                        serial
+                    );
+                }
+            }
+        }
+        log::info!("{} device(s) opened at startup", devices_guard.len());
+    }
 
     // Configure Slack state from config (CLI arg overrides config for app_token).
     let app_token = args.slack_app_token.or(config.slack.app_token);
@@ -105,6 +139,25 @@ async fn main() -> Result<()> {
     let listener = UnixListener::bind(&args.socket)
         .with_context(|| format!("failed to bind socket: {}", args.socket.display()))?;
     log::info!("Listening on {}", args.socket.display());
+
+    // Optional TCP listener.
+    let tcp_port = args.tcp_port.or(config.daemon.tcp_port);
+    let tcp_bind = args
+        .tcp_bind
+        .unwrap_or_else(|| config.daemon.tcp_bind.clone());
+    if let Some(port) = tcp_port {
+        let tcp_addr = format!("{tcp_bind}:{port}");
+        let tcp_listener = tokio::net::TcpListener::bind(&tcp_addr)
+            .await
+            .with_context(|| format!("failed to bind TCP: {tcp_addr}"))?;
+        log::info!("TCP API listening on {tcp_addr}");
+        let tcp_app = api::router(state.clone());
+        tokio::spawn(async move {
+            if let Err(e) = axum::serve(tcp_listener, tcp_app).await {
+                log::error!("TCP server error: {e}");
+            }
+        });
+    }
 
     // Graceful shutdown on SIGINT / SIGTERM.
     let shutdown_signal = async {

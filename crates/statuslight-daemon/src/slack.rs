@@ -365,22 +365,36 @@ async fn trigger_animation(rule: &SlackRule, state: &AppState) {
     *state.inner.event_animation_handle.lock().await = Some(handle);
 }
 
-/// Set color on the HID device, reconnecting if needed.
+/// Set color on all devices, reconnecting if needed.
 async fn set_device_color(state: &AppState, color: Color) {
-    let mut device_guard = state.inner.device.lock().await;
-    if device_guard.is_none() {
+    // Apply brightness.
+    let brightness = state
+        .inner
+        .brightness
+        .load(std::sync::atomic::Ordering::SeqCst);
+    let scaled_color = color.scale_brightness(brightness as f64 / 100.0);
+
+    let mut devices_guard = state.inner.devices.lock().await;
+    if devices_guard.is_empty() {
         if let Ok(dev) = DeviceRegistry::with_builtins().open_any() {
-            *device_guard = Some(dev);
+            devices_guard.push(dev);
         }
     }
-    if let Some(dev) = device_guard.as_ref() {
-        if let Err(e) = dev.set_color(color) {
+
+    let mut failed = Vec::new();
+    for (i, dev) in devices_guard.iter().enumerate() {
+        if let Err(e) = dev.set_color(scaled_color) {
             log::warn!("Failed to set device color: {e}");
-            *device_guard = None;
-        } else {
-            drop(device_guard);
-            *state.inner.current_color.lock().await = Some(color);
+            failed.push(i);
         }
+    }
+    for &i in failed.iter().rev() {
+        devices_guard.remove(i);
+    }
+
+    if !devices_guard.is_empty() || failed.is_empty() {
+        drop(devices_guard);
+        *state.inner.current_color.lock().await = Some(color);
     }
 }
 

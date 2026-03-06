@@ -18,7 +18,7 @@ const FRAME_INTERVAL: Duration = Duration::from_millis(33);
 /// `brightness` acts as a cap on output (0.0–1.0). At 0.5, peak brightness
 /// is halved; at 1.0 (default), output is unchanged.
 pub fn run(animation: AnimationType, colors: &[Color], speed: f64, brightness: f64) -> Result<()> {
-    let device = crate::daemon_client::DeviceProxy::open()?;
+    let device = crate::daemon_client::DeviceProxy::open(false, None)?;
 
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();

@@ -12,11 +12,13 @@
 
 use std::ffi::CStr;
 use std::os::raw::c_char;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Once;
 
 use statuslight_core::{Color, DeviceRegistry, Preset, StatusLightError};
 
 static INIT: Once = Once::new();
+static BRIGHTNESS: AtomicU8 = AtomicU8::new(100);
 
 /// Map a [`StatusLightError`] to an FFI error code.
 fn error_code(e: &StatusLightError) -> i32 {
@@ -34,8 +36,12 @@ fn error_code(e: &StatusLightError) -> i32 {
 
 /// Open the first available device and set it to the given color. Returns 0 on success.
 fn set_color_inner(color: Color) -> i32 {
+    // Apply brightness.
+    let brightness = BRIGHTNESS.load(Ordering::SeqCst);
+    let scaled = color.scale_brightness(brightness as f64 / 100.0);
+
     match DeviceRegistry::with_builtins().open_any() {
-        Ok(dev) => match dev.set_color(color) {
+        Ok(dev) => match dev.set_color(scaled) {
             Ok(()) => 0,
             Err(e) => error_code(&e),
         },
@@ -121,6 +127,34 @@ pub extern "C" fn statuslight_is_connected() -> i32 {
     std::panic::catch_unwind(|| -> i32 {
         let registry = DeviceRegistry::with_builtins();
         i32::from(!registry.enumerate_all().is_empty())
+    })
+    .unwrap_or(-3)
+}
+
+/// Set the global brightness level (0–100).
+///
+/// Returns 0 on success, the clamped brightness value is stored.
+#[no_mangle]
+pub extern "C" fn statuslight_set_brightness(brightness: u8) -> i32 {
+    std::panic::catch_unwind(|| {
+        BRIGHTNESS.store(brightness.min(100), Ordering::SeqCst);
+        0
+    })
+    .unwrap_or(-3)
+}
+
+/// Get the current brightness level (0–100).
+#[no_mangle]
+pub extern "C" fn statuslight_get_brightness() -> i32 {
+    std::panic::catch_unwind(|| BRIGHTNESS.load(Ordering::SeqCst) as i32).unwrap_or(-3)
+}
+
+/// Get the number of connected status light devices.
+#[no_mangle]
+pub extern "C" fn statuslight_device_count() -> i32 {
+    std::panic::catch_unwind(|| -> i32 {
+        let registry = DeviceRegistry::with_builtins();
+        registry.enumerate_all().len() as i32
     })
     .unwrap_or(-3)
 }

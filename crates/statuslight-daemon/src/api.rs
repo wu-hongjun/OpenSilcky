@@ -1,6 +1,8 @@
 //! HTTP API route handlers for the StatusLight daemon.
 
-use axum::extract::State;
+use std::sync::atomic::Ordering;
+
+use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
@@ -18,6 +20,7 @@ pub fn router(state: AppState) -> Router {
         .route("/color", post(post_color))
         .route("/rgb", post(post_rgb))
         .route("/off", post(post_off))
+        .route("/brightness", post(post_brightness))
         .route("/presets", get(get_presets))
         .route("/devices", get(get_devices))
         .route("/slack/status", get(get_slack_status))
@@ -51,7 +54,9 @@ impl From<Color> for ColorResponse {
 #[derive(Serialize)]
 struct StatusResponse {
     device_connected: bool,
+    device_count: usize,
     current_color: Option<ColorResponse>,
+    brightness: u8,
     slack_sync_enabled: bool,
 }
 
@@ -70,6 +75,21 @@ struct RgbRequest {
     r: u8,
     g: u8,
     b: u8,
+}
+
+#[derive(Deserialize)]
+struct DeviceQuery {
+    device: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct BrightnessRequest {
+    brightness: u8,
+}
+
+#[derive(Serialize)]
+struct BrightnessResponse {
+    brightness: u8,
 }
 
 #[derive(Serialize)]
@@ -147,40 +167,67 @@ fn map_error(e: StatusLightError) -> (StatusCode, Json<ErrorResponse>) {
     )
 }
 
-// --- Helper: try to set color on the device ---
+// --- Helper: try to set color on devices ---
 
 async fn try_set_color(
     state: &AppState,
     color: Color,
+    device_serial: Option<&str>,
 ) -> Result<(), (StatusCode, Json<ErrorResponse>)> {
-    let mut device_guard = state.inner.device.lock().await;
+    // Apply brightness.
+    let brightness = state.inner.brightness.load(Ordering::SeqCst);
+    let scaled_color = color.scale_brightness(brightness as f64 / 100.0);
 
-    // Try to reconnect if no device is held.
-    if device_guard.is_none() {
-        match DeviceRegistry::with_builtins().open_any() {
-            Ok(dev) => *device_guard = Some(dev),
+    let mut devices_guard = state.inner.devices.lock().await;
+
+    // Try to reconnect if no devices are held.
+    if devices_guard.is_empty() {
+        let registry = DeviceRegistry::with_builtins();
+        match registry.open_any() {
+            Ok(dev) => devices_guard.push(dev),
             Err(e) => return Err(map_error(e)),
         }
     }
 
-    let dev = device_guard
-        .as_ref()
-        .ok_or_else(|| map_error(StatusLightError::DeviceNotFound))?;
+    // Track indices of failed devices for removal.
+    let mut failed = Vec::new();
 
-    if let Err(e) = dev.set_color(color) {
-        // Device may have been disconnected — drop it so we reconnect next time.
-        *device_guard = None;
-        return Err(map_error(e));
+    if let Some(serial) = device_serial {
+        // Target a specific device by serial.
+        let idx = devices_guard
+            .iter()
+            .position(|d| d.serial() == Some(serial));
+        match idx {
+            Some(i) => {
+                if let Err(e) = devices_guard[i].set_color(scaled_color) {
+                    log::warn!("Device serial={serial} failed: {e}");
+                    failed.push(i);
+                }
+            }
+            None => {
+                return Err(map_error(StatusLightError::DeviceNotFound));
+            }
+        }
+    } else {
+        // Broadcast to all devices.
+        for (i, dev) in devices_guard.iter().enumerate() {
+            if let Err(e) = dev.set_color(scaled_color) {
+                log::warn!("Device {} failed: {e}", dev.driver_name());
+                failed.push(i);
+            }
+        }
     }
 
-    drop(device_guard);
+    // Remove failed devices (in reverse order to preserve indices).
+    for &i in failed.iter().rev() {
+        devices_guard.remove(i);
+    }
+
+    drop(devices_guard);
     *state.inner.current_color.lock().await = Some(color);
 
     // Mark manual override so background Slack polling doesn't overwrite.
-    state
-        .inner
-        .manual_override
-        .store(true, std::sync::atomic::Ordering::SeqCst);
+    state.inner.manual_override.store(true, Ordering::SeqCst);
 
     Ok(())
 }
@@ -188,9 +235,10 @@ async fn try_set_color(
 // --- Route handlers ---
 
 async fn get_status(State(state): State<AppState>) -> impl IntoResponse {
-    let device_guard = state.inner.device.lock().await;
-    let device_connected = device_guard.is_some();
-    drop(device_guard);
+    let devices_guard = state.inner.devices.lock().await;
+    let device_count = devices_guard.len();
+    let device_connected = device_count > 0;
+    drop(devices_guard);
 
     let current_color = state
         .inner
@@ -199,16 +247,20 @@ async fn get_status(State(state): State<AppState>) -> impl IntoResponse {
         .await
         .map(ColorResponse::from);
     let slack_sync_enabled = state.inner.slack.lock().await.enabled;
+    let brightness = state.inner.brightness.load(Ordering::SeqCst);
 
     Json(StatusResponse {
         device_connected,
+        device_count,
         current_color,
+        brightness,
         slack_sync_enabled,
     })
 }
 
 async fn post_color(
     State(state): State<AppState>,
+    Query(query): Query<DeviceQuery>,
     Json(req): Json<ColorRequest>,
 ) -> Result<Json<SetColorResponse>, (StatusCode, Json<ErrorResponse>)> {
     // Try as hex first, then as preset name (with config overrides), then custom presets.
@@ -231,7 +283,7 @@ async fn post_color(
         })
         .map_err(map_error)?;
 
-    try_set_color(&state, color).await?;
+    try_set_color(&state, color, query.device.as_deref()).await?;
     Ok(Json(SetColorResponse {
         color: color.into(),
     }))
@@ -239,10 +291,11 @@ async fn post_color(
 
 async fn post_rgb(
     State(state): State<AppState>,
+    Query(query): Query<DeviceQuery>,
     Json(req): Json<RgbRequest>,
 ) -> Result<Json<SetColorResponse>, (StatusCode, Json<ErrorResponse>)> {
     let color = Color::new(req.r, req.g, req.b);
-    try_set_color(&state, color).await?;
+    try_set_color(&state, color, query.device.as_deref()).await?;
     Ok(Json(SetColorResponse {
         color: color.into(),
     }))
@@ -250,12 +303,22 @@ async fn post_rgb(
 
 async fn post_off(
     State(state): State<AppState>,
+    Query(query): Query<DeviceQuery>,
 ) -> Result<Json<SetColorResponse>, (StatusCode, Json<ErrorResponse>)> {
     let color = Color::off();
-    try_set_color(&state, color).await?;
+    try_set_color(&state, color, query.device.as_deref()).await?;
     Ok(Json(SetColorResponse {
         color: color.into(),
     }))
+}
+
+async fn post_brightness(
+    State(state): State<AppState>,
+    Json(req): Json<BrightnessRequest>,
+) -> impl IntoResponse {
+    let brightness = req.brightness.min(100);
+    state.inner.brightness.store(brightness, Ordering::SeqCst);
+    Json(BrightnessResponse { brightness })
 }
 
 async fn get_presets() -> impl IntoResponse {
