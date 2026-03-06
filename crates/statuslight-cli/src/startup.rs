@@ -1,13 +1,13 @@
-//! macOS LaunchAgent management for the Slicky daemon.
+//! macOS LaunchAgent management for the StatusLight daemon.
 
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
 use anyhow::{Context, Result};
-use slicky_core::Config;
+use statuslight_core::Config;
 
-const PLIST_LABEL: &str = "com.openslicky.daemon";
+const PLIST_LABEL: &str = "com.statuslight.daemon";
 
 /// Return `~/Library/LaunchAgents/<label>.plist`.
 fn plist_path() -> Result<PathBuf> {
@@ -18,21 +18,21 @@ fn plist_path() -> Result<PathBuf> {
         .join(format!("{PLIST_LABEL}.plist")))
 }
 
-/// Find the `slickyd` binary — check sibling of current exe first, then PATH.
-fn find_slickyd() -> Result<PathBuf> {
+/// Find the `statuslightd` binary — check sibling of current exe first, then PATH.
+fn find_statuslightd() -> Result<PathBuf> {
     // Sibling of current executable.
     if let Ok(exe) = std::env::current_exe() {
-        let sibling = exe.with_file_name("slickyd");
+        let sibling = exe.with_file_name("statuslightd");
         if sibling.exists() {
             return Ok(sibling);
         }
     }
 
-    // Fall back to `which slickyd`.
+    // Fall back to `which statuslightd`.
     let output = Command::new("which")
-        .arg("slickyd")
+        .arg("statuslightd")
         .output()
-        .context("failed to run `which slickyd`")?;
+        .context("failed to run `which statuslightd`")?;
 
     if output.status.success() {
         let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -41,7 +41,7 @@ fn find_slickyd() -> Result<PathBuf> {
         }
     }
 
-    anyhow::bail!("cannot find slickyd binary — install it first")
+    anyhow::bail!("cannot find statuslightd binary — install it first")
 }
 
 /// Escape a string for safe inclusion in XML text content.
@@ -53,8 +53,8 @@ fn xml_escape(s: &str) -> String {
 }
 
 /// Generate the LaunchAgent plist XML.
-fn plist_contents(slickyd_path: &str) -> String {
-    let escaped_path = xml_escape(slickyd_path);
+fn plist_contents(statuslightd_path: &str) -> String {
+    let escaped_path = xml_escape(statuslightd_path);
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -76,19 +76,19 @@ fn plist_contents(slickyd_path: &str) -> String {
   <true/>
 
   <key>StandardOutPath</key>
-  <string>/tmp/slicky-daemon.log</string>
+  <string>/tmp/statuslight-daemon.log</string>
 
   <key>StandardErrorPath</key>
-  <string>/tmp/slicky-daemon.log</string>
+  <string>/tmp/statuslight-daemon.log</string>
 </dict>
 </plist>
 "#
     )
 }
 
-/// `slicky startup enable` — install LaunchAgent and start daemon.
+/// `statuslight startup enable` — install LaunchAgent and start daemon.
 pub fn enable() -> Result<()> {
-    let slickyd = find_slickyd()?;
+    let statuslightd = find_statuslightd()?;
     let plist = plist_path()?;
 
     // Create LaunchAgents directory if needed.
@@ -96,7 +96,7 @@ pub fn enable() -> Result<()> {
         fs::create_dir_all(parent).context("failed to create LaunchAgents directory")?;
     }
 
-    let contents = plist_contents(&slickyd.to_string_lossy());
+    let contents = plist_contents(&statuslightd.to_string_lossy());
     fs::write(&plist, contents).context("failed to write LaunchAgent plist")?;
 
     // Load and start.
@@ -115,12 +115,12 @@ pub fn enable() -> Result<()> {
     config.startup.enabled = true;
     config.save()?;
 
-    println!("Startup enabled — slickyd will start automatically on login.");
+    println!("Startup enabled — statuslightd will start automatically on login.");
     println!("Plist: {}", plist.display());
     Ok(())
 }
 
-/// `slicky startup disable` — stop daemon and remove LaunchAgent.
+/// `statuslight startup disable` — stop daemon and remove LaunchAgent.
 pub fn disable() -> Result<()> {
     let plist = plist_path()?;
 
@@ -140,7 +140,7 @@ pub fn disable() -> Result<()> {
     Ok(())
 }
 
-/// `slicky startup status` — show if enabled and if daemon is running.
+/// `statuslight startup status` — show if enabled and if daemon is running.
 pub fn status() -> Result<()> {
     let config = Config::load()?;
     let plist = plist_path()?;
@@ -165,7 +165,7 @@ pub fn status() -> Result<()> {
 
     if !config.startup.enabled && installed {
         println!(
-            "(plist exists but config says disabled — run `slicky startup enable` to reconcile)"
+            "(plist exists but config says disabled — run `statuslight startup enable` to reconcile)"
         );
     }
 
@@ -179,8 +179,8 @@ mod tests {
     #[test]
     fn xml_escape_no_special_chars() {
         assert_eq!(
-            xml_escape("/usr/local/bin/slickyd"),
-            "/usr/local/bin/slickyd"
+            xml_escape("/usr/local/bin/statuslightd"),
+            "/usr/local/bin/statuslightd"
         );
     }
 
@@ -209,14 +209,14 @@ mod tests {
 
     #[test]
     fn plist_contains_label() {
-        let plist = plist_contents("/usr/local/bin/slickyd");
+        let plist = plist_contents("/usr/local/bin/statuslightd");
         assert!(plist.contains(PLIST_LABEL));
     }
 
     #[test]
     fn plist_contains_path() {
-        let plist = plist_contents("/opt/slickyd");
-        assert!(plist.contains("/opt/slickyd"));
+        let plist = plist_contents("/opt/statuslightd");
+        assert!(plist.contains("/opt/statuslightd"));
     }
 
     #[test]
@@ -230,26 +230,26 @@ mod tests {
 
     #[test]
     fn plist_has_run_at_load() {
-        let plist = plist_contents("/usr/local/bin/slickyd");
+        let plist = plist_contents("/usr/local/bin/statuslightd");
         assert!(plist.contains("<key>RunAtLoad</key>"));
         assert!(plist.contains("<true/>"));
     }
 
     #[test]
     fn plist_has_keep_alive() {
-        let plist = plist_contents("/usr/local/bin/slickyd");
+        let plist = plist_contents("/usr/local/bin/statuslightd");
         assert!(plist.contains("<key>KeepAlive</key>"));
     }
 
     #[test]
     fn plist_has_log_paths() {
-        let plist = plist_contents("/usr/local/bin/slickyd");
-        assert!(plist.contains("/tmp/slicky-daemon.log"));
+        let plist = plist_contents("/usr/local/bin/statuslightd");
+        assert!(plist.contains("/tmp/statuslight-daemon.log"));
     }
 
     #[test]
     fn plist_is_valid_xml_declaration() {
-        let plist = plist_contents("/usr/local/bin/slickyd");
+        let plist = plist_contents("/usr/local/bin/statuslightd");
         assert!(plist.starts_with("<?xml version=\"1.0\""));
     }
 

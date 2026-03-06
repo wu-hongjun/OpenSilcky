@@ -7,7 +7,7 @@ use std::io::{self, BufRead, Write};
 use std::process::Command;
 
 use anyhow::{bail, ensure, Context, Result};
-use slicky_core::Config;
+use statuslight_core::Config;
 
 use crate::daemon_client::DeviceProxy;
 
@@ -80,14 +80,14 @@ fn prompt_continue(msg: &str) -> Result<()> {
     Ok(())
 }
 
-/// `slicky slack open-setup` — copy manifest to clipboard and open browser (non-interactive).
+/// `statuslight slackopen-setup` — copy manifest to clipboard and open browser (non-interactive).
 pub fn open_setup() -> Result<()> {
     copy_to_clipboard(&manifest_json());
     open::that(APP_CREATION_URL).context("failed to open browser")?;
     Ok(())
 }
 
-/// `slicky slack configure --stdin` — reads tokens from stdin (one per line).
+/// `statuslight slackconfigure --stdin` — reads tokens from stdin (one per line).
 ///
 /// Avoids exposing tokens in process arguments visible via `ps`.
 pub fn configure_from_stdin() -> Result<()> {
@@ -108,7 +108,7 @@ pub fn configure_from_stdin() -> Result<()> {
     configure(&lines[0], &lines[1], &lines[2])
 }
 
-/// `slicky slack configure` — non-interactive token setup (for macOS app).
+/// `statuslight slackconfigure` — non-interactive token setup (for macOS app).
 ///
 /// Validates tokens and saves to config. Prints JSON result for machine parsing.
 pub fn configure(app_token: &str, bot_token: &str, user_token: &str) -> Result<()> {
@@ -138,7 +138,7 @@ pub fn configure(app_token: &str, bot_token: &str, user_token: &str) -> Result<(
     Ok(())
 }
 
-/// `slicky slack setup` — guided wizard to configure Slack tokens.
+/// `statuslight slack setup` — guided wizard to configure Slack tokens.
 pub fn setup() -> Result<()> {
     println!("=== Status Light — Slack Setup ===\n");
 
@@ -214,7 +214,7 @@ fn save_tokens(app_token: &str, bot_token: &str, user_token: &str) -> Result<()>
 
     // Populate a default DM rule if empty.
     if config.slack.rules.is_empty() {
-        config.slack.rules.push(slicky_core::SlackRule {
+        config.slack.rules.push(statuslight_core::SlackRule {
             name: "DM notification".to_string(),
             event: "message.im".to_string(),
             from_user: None,
@@ -231,7 +231,7 @@ fn save_tokens(app_token: &str, bot_token: &str, user_token: &str) -> Result<()>
     Ok(())
 }
 
-/// `slicky slack disconnect` — clear all Slack tokens.
+/// `statuslight slackdisconnect` — clear all Slack tokens.
 pub fn disconnect() -> Result<()> {
     let mut config = Config::load()?;
     let had_tokens = config.slack.app_token.is_some()
@@ -260,7 +260,7 @@ pub fn disconnect() -> Result<()> {
     Ok(())
 }
 
-/// `slicky slack status` — show connection state.
+/// `statuslight slackstatus` — show connection state.
 pub fn status() -> Result<()> {
     let config = Config::load()?;
 
@@ -294,16 +294,16 @@ pub fn status() -> Result<()> {
         println!("  Emoji map:  {} entries", config.slack.emoji_colors.len());
     } else {
         println!("Slack: not connected");
-        println!("Run `slicky slack setup` to connect.");
+        println!("Run `statuslight slack setup` to connect.");
     }
     Ok(())
 }
 
-/// `slicky slack set-status` — set Slack status text and emoji.
+/// `statuslight slackset-status` — set Slack status text and emoji.
 pub fn set_status(text: &str, emoji: &str) -> Result<()> {
     let config = Config::load()?;
     let token = config.slack.user_token.ok_or_else(|| {
-        anyhow::anyhow!("not connected to Slack — run `slicky slack setup` first")
+        anyhow::anyhow!("not connected to Slack — run `statuslight slack setup` first")
     })?;
 
     let body = serde_json::json!({
@@ -338,7 +338,7 @@ pub fn set_status(text: &str, emoji: &str) -> Result<()> {
     Ok(())
 }
 
-/// `slicky slack clear-status` — clear Slack status.
+/// `statuslight slackclear-status` — clear Slack status.
 pub fn clear_status() -> Result<()> {
     set_status("", "")
 }

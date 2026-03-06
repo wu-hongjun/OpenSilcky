@@ -4,10 +4,10 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use semver::Version;
 use serde::Serialize;
-use slicky_core::Config;
+use statuslight_core::Config;
 use std::process::Command;
 
-const RELEASES_URL: &str = "https://api.github.com/repos/wu-hongjun/OpenSilcky/releases/latest";
+const RELEASES_URL: &str = "https://api.github.com/repos/wu-hongjun/StatusLight/releases/latest";
 
 /// JSON output for `slicky update status`.
 #[derive(Debug, Serialize)]
@@ -27,7 +27,7 @@ pub struct InstallResult {
     pub error: Option<String>,
 }
 
-/// `slicky update check` — manual check, always hits API.
+/// `statuslight update check` — manual check, always hits API.
 pub fn check() -> Result<()> {
     let mut config = Config::load()?;
     let current = current_version()?;
@@ -44,7 +44,7 @@ pub fn check() -> Result<()> {
             if latest > current {
                 println!("New version available: {latest}");
                 println!(
-                    "Download: https://github.com/wu-hongjun/OpenSilcky/releases/tag/v{latest}"
+                    "Download: https://github.com/wu-hongjun/StatusLight/releases/tag/v{latest}"
                 );
             } else {
                 println!("You are up to date.");
@@ -58,7 +58,7 @@ pub fn check() -> Result<()> {
     Ok(())
 }
 
-/// `slicky update status` — reads cached config, outputs JSON (no network).
+/// `statuslight update status` — reads cached config, outputs JSON (no network).
 pub fn status() -> Result<()> {
     let config = Config::load()?;
     let current = current_version()?;
@@ -72,7 +72,7 @@ pub fn status() -> Result<()> {
     let download_url = if update_available {
         latest_str.map(|v| {
             format!(
-                "https://github.com/wu-hongjun/OpenSilcky/releases/download/v{v}/OpenSlicky.dmg"
+                "https://github.com/wu-hongjun/StatusLight/releases/download/v{v}/StatusLight.dmg"
             )
         })
     } else {
@@ -91,7 +91,7 @@ pub fn status() -> Result<()> {
     Ok(())
 }
 
-/// `slicky update install` — downloads DMG, replaces app, restarts daemon.
+/// `statuslight update install` — downloads DMG, replaces app, restarts daemon.
 pub fn install() -> Result<()> {
     let current = current_version()?;
 
@@ -121,9 +121,9 @@ pub fn install() -> Result<()> {
 
     let version_str = latest.to_string();
     let dmg_url = format!(
-        "https://github.com/wu-hongjun/OpenSilcky/releases/download/v{version_str}/OpenSlicky.dmg"
+        "https://github.com/wu-hongjun/StatusLight/releases/download/v{version_str}/StatusLight.dmg"
     );
-    let dmg_path = format!("/tmp/OpenSlicky-update-{version_str}.dmg");
+    let dmg_path = format!("/tmp/StatusLight-update-{version_str}.dmg");
 
     // Download DMG.
     if let Err(e) = download_file(&dmg_url, &dmg_path) {
@@ -184,10 +184,10 @@ pub fn install() -> Result<()> {
     }
 
     // Copy new app from mounted volume using atomic swap with rollback.
-    let source_app = format!("{mount_point}/OpenSlicky.app");
-    let dest_app = "/Applications/OpenSlicky.app";
-    let backup_app = "/Applications/OpenSlicky.app.bak";
-    let staging_app = "/Applications/OpenSlicky.app.new";
+    let source_app = format!("{mount_point}/StatusLight.app");
+    let dest_app = "/Applications/StatusLight.app";
+    let backup_app = "/Applications/StatusLight.app.bak";
+    let staging_app = "/Applications/StatusLight.app.new";
 
     // 1. Copy new app to staging location.
     let _ = Command::new("rm").args(["-rf", staging_app]).status();
@@ -258,7 +258,7 @@ pub fn install() -> Result<()> {
 
     // Restart daemon (LaunchAgent KeepAlive will restart it with the new binary).
     let _ = Command::new("launchctl")
-        .args(["stop", "com.openslicky.daemon"])
+        .args(["stop", "com.statuslight.daemon"])
         .status();
 
     // Update config with the new version info.
@@ -286,7 +286,7 @@ pub fn current_version() -> Result<Version> {
 pub fn fetch_latest() -> Result<Option<Version>> {
     let resp = ureq::get(RELEASES_URL)
         .header("Accept", "application/vnd.github.v3+json")
-        .header("User-Agent", "openslicky-cli")
+        .header("User-Agent", "statuslight-cli")
         .call()
         .context("failed to fetch latest release")?;
 
@@ -309,7 +309,7 @@ pub fn fetch_latest() -> Result<Option<Version>> {
 /// Download a file from `url` to `dest` path (streams to disk).
 fn download_file(url: &str, dest: &str) -> Result<()> {
     let resp = ureq::get(url)
-        .header("User-Agent", "openslicky-cli")
+        .header("User-Agent", "statuslight-cli")
         .call()
         .context("failed to download file")?;
 
@@ -411,7 +411,7 @@ mod tests {
             <key>dev-entry</key>
             <string>/dev/disk4s2</string>
             <key>mount-point</key>
-            <string>/Volumes/OpenSlicky</string>
+            <string>/Volumes/StatusLight</string>
             <key>potentially-mountable</key>
             <true/>
         </dict>
@@ -420,7 +420,7 @@ mod tests {
 </plist>"#;
         assert_eq!(
             parse_mount_point(plist),
-            Some("/Volumes/OpenSlicky".to_string())
+            Some("/Volumes/StatusLight".to_string())
         );
     }
 
@@ -448,7 +448,7 @@ mod tests {
             latest_version: Some("0.2.0".into()),
             update_available: true,
             last_check: Some("2026-01-01T00:00:00+00:00".into()),
-            download_url: Some("https://example.com/OpenSlicky.dmg".into()),
+            download_url: Some("https://example.com/StatusLight.dmg".into()),
         };
         let json = serde_json::to_string(&status).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();

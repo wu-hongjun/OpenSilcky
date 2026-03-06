@@ -1,9 +1,9 @@
-//! CLI handlers for the `slicky color` subcommand.
+//! CLI handlers for the `statuslight color` subcommand.
 //!
 //! Manages color overrides for built-in presets in the config file.
 
 use anyhow::{Context, Result};
-use slicky_core::{Color, Config, Preset};
+use statuslight_core::{Color, Config, Preset};
 
 /// Override a built-in preset color.
 pub fn override_color(preset_name: &str, hex: &str) -> Result<()> {

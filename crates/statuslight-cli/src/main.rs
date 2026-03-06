@@ -9,14 +9,10 @@ mod update;
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use daemon_client::DeviceProxy;
-use slicky_core::{AnimationType, Color, Config, HidSlickyDevice, Preset};
+use statuslight_core::{AnimationType, Color, Config, HidSlickyDevice, Preset};
 
 #[derive(Parser)]
-#[command(
-    name = "slicky",
-    version,
-    about = "Control your Slicky USB status light"
-)]
+#[command(name = "statuslight", version, about = "Control your USB status light")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -254,7 +250,7 @@ enum StartupAction {
 
 #[derive(Subcommand)]
 enum UpdateAction {
-    /// Check for a newer version of OpenSlicky
+    /// Check for a newer version of StatusLight
     Check,
     /// Show cached update status as JSON (no network, for macOS app)
     Status,

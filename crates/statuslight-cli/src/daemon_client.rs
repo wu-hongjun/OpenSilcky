@@ -7,10 +7,10 @@ use std::path::Path;
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
-use slicky_core::{Color, HidSlickyDevice, SlickyDevice};
+use statuslight_core::{Color, HidSlickyDevice, StatusLightDevice};
 
 /// Socket path used by the daemon.
-const DAEMON_SOCKET: &str = "/tmp/slicky.sock";
+const DAEMON_SOCKET: &str = "/tmp/statuslight.sock";
 
 /// Maximum response size we'll read from the daemon (64 KiB).
 const MAX_RESPONSE_SIZE: u64 = 64 * 1024;

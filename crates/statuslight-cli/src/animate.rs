@@ -1,4 +1,4 @@
-//! CLI handler for the `slicky animate` command.
+//! CLI handler for the `statuslight animate` command.
 //!
 //! Runs a blocking 30 FPS animation loop that sends color frames to the
 //! device via HID. Exits cleanly on Ctrl-C (SIGTERM/SIGINT).
@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use slicky_core::{AnimationType, Color};
+use statuslight_core::{AnimationType, Color};
 
 /// Target frame interval (~30 FPS).
 const FRAME_INTERVAL: Duration = Duration::from_millis(33);

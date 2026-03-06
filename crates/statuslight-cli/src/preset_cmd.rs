@@ -1,9 +1,9 @@
-//! CLI handlers for the `slicky preset` subcommand.
+//! CLI handlers for the `statuslight preset` subcommand.
 //!
 //! Manages user-created custom presets in the config file.
 
 use anyhow::{bail, Context, Result};
-use slicky_core::{AnimationType, Color, Config, CustomPreset};
+use statuslight_core::{AnimationType, Color, Config, CustomPreset};
 
 /// Add a new custom preset.
 pub fn add(name: &str, hex: &str, animation: Option<&str>, speed: f64) -> Result<()> {
