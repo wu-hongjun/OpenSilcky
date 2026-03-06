@@ -143,6 +143,7 @@ final class ViewModel: ObservableObject {
     private var updateTimer: Timer?
     private var animationProcess: Process?
     private var refreshTask: Task<Void, Never>?
+    private var isRefreshing = false
 
     init() {
         _showInDock = Published(initialValue: UserDefaults.standard.bool(forKey: "showInDock"))
@@ -150,9 +151,12 @@ final class ViewModel: ObservableObject {
         let savedIntensity = UserDefaults.standard.double(forKey: "lightIntensity")
         _intensity = Published(initialValue: savedIntensity > 0 ? savedIntensity : 1.0)
         isInstalled = cli.isInstalled
-        startPolling()
-        loadCustomPresets()
-        startUpdateChecking()
+        // Only spawn CLI processes if the binary is actually installed.
+        if isInstalled {
+            startPolling()
+            loadCustomPresets()
+            startUpdateChecking()
+        }
     }
 
     deinit {
@@ -168,13 +172,19 @@ final class ViewModel: ObservableObject {
     }
 
     func refresh() {
-        refreshTask?.cancel()
+        // Skip if a previous refresh is still in flight (prevents process accumulation).
+        guard !isRefreshing else { return }
+        isRefreshing = true
         refreshTask = Task { @MainActor in
             let dev = await cli.isDeviceConnected()
             let slack = await cli.isSlackConnected()
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                self.isRefreshing = false
+                return
+            }
             self.deviceConnected = dev
             self.slackConnected = slack
+            self.isRefreshing = false
         }
     }
 
