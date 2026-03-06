@@ -372,22 +372,31 @@ async fn get_devices() -> Result<Json<Vec<DeviceEntry>>, (StatusCode, Json<Error
 }
 
 async fn get_device_color(
+    State(state): State<AppState>,
     Query(query): Query<DeviceQuery>,
 ) -> Result<Json<DeviceColorResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let registry = DeviceRegistry::with_builtins();
-    let dev = if let Some(ref serial) = query.device {
-        // Find which driver owns this serial.
-        let all = registry.enumerate_all();
-        let (driver_id, _) = all
+    let mut devices_guard = state.inner.devices.lock().await;
+
+    // Reconnect if no devices are held.
+    if devices_guard.is_empty() {
+        let registry = DeviceRegistry::with_builtins();
+        match registry.open_any() {
+            Ok(dev) => devices_guard.push(dev),
+            Err(e) => return Err(map_error(e)),
+        }
+    }
+
+    // Find the target device.
+    let idx = if let Some(ref serial) = query.device {
+        devices_guard
             .iter()
-            .find(|(_, info)| info.serial.as_deref() == Some(serial.as_str()))
-            .ok_or_else(|| map_error(StatusLightError::DeviceNotFound))?;
-        registry.open(driver_id, Some(serial)).map_err(map_error)?
+            .position(|d| d.serial() == Some(serial.as_str()))
+            .ok_or_else(|| map_error(StatusLightError::DeviceNotFound))?
     } else {
-        registry.open_any().map_err(map_error)?
+        0
     };
 
-    match dev.get_color() {
+    match devices_guard[idx].get_color() {
         None => Ok(Json(DeviceColorResponse {
             device_color: None,
             supports_readback: false,

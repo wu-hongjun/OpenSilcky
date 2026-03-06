@@ -9,6 +9,10 @@
 //! - `-5` — invalid argument (null pointer, bad UTF-8)
 //! - `-6` — write failed
 //! - `-7` — unknown or invalid preset
+//! - `-8` — unknown driver
+//! - `-9` — device read timed out
+//! - `-10` — unexpected device response
+//! - `-11` — readback not supported by this device
 
 use std::ffi::CStr;
 use std::os::raw::c_char;
@@ -176,7 +180,7 @@ pub unsafe extern "C" fn statuslight_get_color(r: *mut u8, g: *mut u8, b: *mut u
         }
         match DeviceRegistry::with_builtins().open_any() {
             Ok(dev) => match dev.get_color() {
-                None => -9, // readback not supported
+                None => -11, // readback not supported
                 Some(Ok(color)) => {
                     // SAFETY: caller guarantees pointers are valid and writable.
                     *r = color.r;

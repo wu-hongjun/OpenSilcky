@@ -48,6 +48,7 @@ const CMD_GET_COLOR: u8 = 0x0B;
 pub const READ_TIMEOUT_MS: i32 = 200;
 
 // Response byte offsets for CMD 0x0B get color.
+const RESP_SUBCMD_GET_COLOR: u8 = 0x04;
 const RESP_COLOR_BLUE: usize = 5;
 const RESP_COLOR_GREEN: usize = 6;
 const RESP_COLOR_RED: usize = 7;
@@ -85,7 +86,7 @@ pub fn build_get_color_request() -> [u8; BUFFER_SIZE] {
 /// Returns `Some(Color)` if the response is valid (starts with `0x0B`
 /// and has at least 8 bytes), or `None` otherwise.
 pub fn parse_get_color_response(resp: &[u8]) -> Option<Color> {
-    if resp.len() < 8 || resp[0] != CMD_GET_COLOR {
+    if resp.len() < 8 || resp[0] != CMD_GET_COLOR || resp[1] != RESP_SUBCMD_GET_COLOR {
         return None;
     }
     Some(Color::new(
@@ -178,6 +179,7 @@ mod tests {
     fn parse_get_color_response_valid() {
         let mut resp = [0u8; 64];
         resp[0] = 0x0B;
+        resp[1] = 0x04; // subcommand
         resp[RESP_COLOR_BLUE] = 0x33;
         resp[RESP_COLOR_GREEN] = 0x22;
         resp[RESP_COLOR_RED] = 0x11;
@@ -191,6 +193,15 @@ mod tests {
     fn parse_get_color_response_wrong_command() {
         let mut resp = [0u8; 64];
         resp[0] = 0x0A; // wrong command
+        resp[1] = 0x04;
+        assert!(parse_get_color_response(&resp).is_none());
+    }
+
+    #[test]
+    fn parse_get_color_response_wrong_subcommand() {
+        let mut resp = [0u8; 64];
+        resp[0] = 0x0B;
+        resp[1] = 0x05; // wrong subcommand
         assert!(parse_get_color_response(&resp).is_none());
     }
 

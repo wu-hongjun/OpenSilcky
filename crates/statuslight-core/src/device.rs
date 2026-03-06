@@ -106,7 +106,13 @@ impl HidSlickyDevice {
     /// Read the current color from the device via CMD 0x0B.
     fn read_color(&self) -> Result<Color> {
         let request = protocol::build_get_color_request();
-        self.device.write(&request)?;
+        let written = self.device.write(&request)?;
+        if written != BUFFER_SIZE {
+            return Err(StatusLightError::WriteMismatch {
+                expected: BUFFER_SIZE,
+                actual: written,
+            });
+        }
 
         let mut buf = [0u8; protocol::REPORT_SIZE];
         let n = self

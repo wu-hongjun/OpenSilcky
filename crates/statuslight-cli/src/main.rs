@@ -574,20 +574,29 @@ fn main() -> Result<()> {
                     // Via daemon.
                     let proxy = DeviceProxy::open(false, None)?;
                     match proxy.get("/device-color") {
-                        Ok(body) => {
-                            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&body) {
+                        Ok(body) => match serde_json::from_str::<serde_json::Value>(&body) {
+                            Ok(parsed) => {
                                 if parsed["supports_readback"].as_bool() == Some(true) {
-                                    if let Some(dc) = parsed.get("device_color") {
-                                        let hex = dc["hex"].as_str().unwrap_or("unknown");
-                                        println!("Color:   {hex} (from device)");
+                                    match parsed
+                                        .get("device_color")
+                                        .and_then(|dc| dc.get("hex"))
+                                        .and_then(|h| h.as_str())
+                                    {
+                                        Some(hex) => println!("Color:   {hex} (from device)"),
+                                        None => println!("Color:   unavailable"),
                                     }
                                 } else {
                                     println!("Color:   readback not supported");
                                 }
                             }
-                        }
+                            Err(e) => {
+                                log::debug!("Failed to parse device-color response: {e}");
+                                println!("Color:   unavailable");
+                            }
+                        },
                         Err(e) => {
                             log::debug!("Failed to read device color: {e}");
+                            println!("Color:   unavailable");
                         }
                     }
                 } else {
@@ -599,6 +608,7 @@ fn main() -> Result<()> {
                             }
                             Some(Err(e)) => {
                                 log::debug!("Failed to read color: {e}");
+                                println!("Color:   unavailable");
                             }
                             None => {
                                 println!("Color:   readback not supported");
@@ -606,6 +616,7 @@ fn main() -> Result<()> {
                         },
                         Err(e) => {
                             log::debug!("Failed to open device for readback: {e}");
+                            println!("Color:   unavailable");
                         }
                     }
                 }
