@@ -14,12 +14,15 @@
       "user": [
         "users.profile:read",
         "users.profile:write",
+        "users:read",
         "im:read",
         "im:history"
       ],
       "bot": [
+        "app_mentions:read",
         "im:read",
-        "im:history"
+        "im:history",
+        "users:read"
       ]
     }
   },
@@ -30,7 +33,8 @@
         "message.im"
       ],
       "bot_events": [
-        "app_mention"
+        "app_mention",
+        "user_change"
       ]
     },
     "org_deploy_enabled": false,
