@@ -13,7 +13,7 @@ use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::sync::Once;
 
-use statuslight_core::{Color, HidSlickyDevice, Preset, StatusLightDevice, StatusLightError};
+use statuslight_core::{Color, DeviceRegistry, Preset, StatusLightError};
 
 static INIT: Once = Once::new();
 
@@ -30,9 +30,9 @@ fn error_code(e: &StatusLightError) -> i32 {
     }
 }
 
-/// Open the device and set it to the given color. Returns 0 on success.
+/// Open the first available device and set it to the given color. Returns 0 on success.
 fn set_color_inner(color: Color) -> i32 {
-    match HidSlickyDevice::open() {
+    match DeviceRegistry::with_builtins().open_any() {
         Ok(dev) => match dev.set_color(color) {
             Ok(()) => 0,
             Err(e) => error_code(&e),
@@ -111,16 +111,14 @@ pub extern "C" fn statuslight_off() -> i32 {
     std::panic::catch_unwind(|| set_color_inner(Color::off())).unwrap_or(-3)
 }
 
-/// Check if a Slicky device is connected.
+/// Check if any status light device is connected.
 ///
 /// Returns `1` if connected, `0` if not. Never returns error codes.
 #[no_mangle]
 pub extern "C" fn statuslight_is_connected() -> i32 {
     std::panic::catch_unwind(|| -> i32 {
-        match HidSlickyDevice::enumerate() {
-            Ok(devices) => i32::from(!devices.is_empty()),
-            Err(_) => 0,
-        }
+        let registry = DeviceRegistry::with_builtins();
+        i32::from(!registry.enumerate_all().is_empty())
     })
     .unwrap_or_default()
 }
