@@ -1,4 +1,4 @@
-//! C FFI bindings for controlling Slicky USB status lights from Swift/C.
+//! C FFI bindings for controlling USB status lights from Swift/C.
 //!
 //! All functions return `i32` status codes:
 //! -  `0` — success
@@ -13,20 +13,20 @@ use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::sync::Once;
 
-use slicky_core::{Color, HidSlickyDevice, Preset, SlickyDevice, SlickyError};
+use statuslight_core::{Color, HidSlickyDevice, Preset, StatusLightDevice, StatusLightError};
 
 static INIT: Once = Once::new();
 
-/// Map a [`SlickyError`] to an FFI error code.
-fn error_code(e: &SlickyError) -> i32 {
+/// Map a [`StatusLightError`] to an FFI error code.
+fn error_code(e: &StatusLightError) -> i32 {
     match e {
-        SlickyError::DeviceNotFound => -1,
-        SlickyError::MultipleDevices { .. } => -2,
-        SlickyError::Hid(_) => -3,
-        SlickyError::InvalidHexColor(_) => -4,
-        SlickyError::UnknownPreset(_) => -4,
-        SlickyError::WriteMismatch { .. } => -6,
-        SlickyError::DuplicatePreset(_) | SlickyError::PresetNotFound(_) => -4,
+        StatusLightError::DeviceNotFound => -1,
+        StatusLightError::MultipleDevices { .. } => -2,
+        StatusLightError::Hid(_) => -3,
+        StatusLightError::InvalidHexColor(_) => -4,
+        StatusLightError::UnknownPreset(_) => -4,
+        StatusLightError::WriteMismatch { .. } => -6,
+        StatusLightError::DuplicatePreset(_) | StatusLightError::PresetNotFound(_) => -4,
     }
 }
 
@@ -43,7 +43,7 @@ fn set_color_inner(color: Color) -> i32 {
 
 /// Initialize logging. Safe to call multiple times.
 #[no_mangle]
-pub extern "C" fn slicky_init() {
+pub extern "C" fn statuslight_init() {
     INIT.call_once(|| {
         env_logger::init();
     });
@@ -51,7 +51,7 @@ pub extern "C" fn slicky_init() {
 
 /// Set the light to the given RGB color.
 #[no_mangle]
-pub extern "C" fn slicky_set_rgb(r: u8, g: u8, b: u8) -> i32 {
+pub extern "C" fn statuslight_set_rgb(r: u8, g: u8, b: u8) -> i32 {
     std::panic::catch_unwind(|| set_color_inner(Color::new(r, g, b))).unwrap_or(-3)
 }
 
@@ -61,7 +61,7 @@ pub extern "C" fn slicky_set_rgb(r: u8, g: u8, b: u8) -> i32 {
 ///
 /// `hex` must be a valid, non-null, null-terminated UTF-8 C string.
 #[no_mangle]
-pub unsafe extern "C" fn slicky_set_hex(hex: *const c_char) -> i32 {
+pub unsafe extern "C" fn statuslight_set_hex(hex: *const c_char) -> i32 {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         if hex.is_null() {
             return -5;
@@ -86,7 +86,7 @@ pub unsafe extern "C" fn slicky_set_hex(hex: *const c_char) -> i32 {
 ///
 /// `name` must be a valid, non-null, null-terminated UTF-8 C string.
 #[no_mangle]
-pub unsafe extern "C" fn slicky_set_preset(name: *const c_char) -> i32 {
+pub unsafe extern "C" fn statuslight_set_preset(name: *const c_char) -> i32 {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         if name.is_null() {
             return -5;
@@ -107,7 +107,7 @@ pub unsafe extern "C" fn slicky_set_preset(name: *const c_char) -> i32 {
 
 /// Turn the light off.
 #[no_mangle]
-pub extern "C" fn slicky_off() -> i32 {
+pub extern "C" fn statuslight_off() -> i32 {
     std::panic::catch_unwind(|| set_color_inner(Color::off())).unwrap_or(-3)
 }
 
@@ -115,7 +115,7 @@ pub extern "C" fn slicky_off() -> i32 {
 ///
 /// Returns `1` if connected, `0` if not. Never returns error codes.
 #[no_mangle]
-pub extern "C" fn slicky_is_connected() -> i32 {
+pub extern "C" fn statuslight_is_connected() -> i32 {
     std::panic::catch_unwind(|| -> i32 {
         match HidSlickyDevice::enumerate() {
             Ok(devices) => i32::from(!devices.is_empty()),

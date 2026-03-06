@@ -11,5 +11,5 @@ fn main() {
         .with_config(cbindgen::Config::from_file("cbindgen.toml").unwrap())
         .generate()
         .expect("Unable to generate C bindings")
-        .write_to_file(output_dir.join("slicky.h"));
+        .write_to_file(output_dir.join("statuslight.h"));
 }
