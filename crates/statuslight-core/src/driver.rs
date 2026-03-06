@@ -28,11 +28,12 @@ pub trait DeviceDriver: Send + Sync {
     fn supported_hardware(&self) -> Vec<SupportedDevice>;
 
     /// Enumerate all connected devices this driver supports.
-    fn enumerate(&self) -> Result<Vec<DeviceInfo>>;
+    fn enumerate(&self, api: &hidapi::HidApi) -> Result<Vec<DeviceInfo>>;
 
     /// Open the first available device.
-    fn open(&self) -> Result<Box<dyn StatusLightDevice>>;
+    fn open(&self, api: &hidapi::HidApi) -> Result<Box<dyn StatusLightDevice>>;
 
     /// Open a device by serial number.
-    fn open_serial(&self, serial: &str) -> Result<Box<dyn StatusLightDevice>>;
+    fn open_serial(&self, api: &hidapi::HidApi, serial: &str)
+        -> Result<Box<dyn StatusLightDevice>>;
 }

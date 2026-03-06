@@ -18,44 +18,44 @@ pub struct AppState {
 pub struct AppStateInner {
     /// All open device handles. Empty if no devices are connected.
     /// `Mutex` because `HidDevice` is `Send` but not `Sync`.
-    pub devices: Mutex<Vec<Box<dyn StatusLightDevice>>>,
+    pub(crate) devices: Mutex<Vec<Box<dyn StatusLightDevice>>>,
     /// The last color set on the device.
-    pub current_color: Mutex<Option<Color>>,
+    pub(crate) current_color: Mutex<Option<Color>>,
     /// Global brightness level (0–100).
-    pub brightness: AtomicU8,
+    pub(crate) brightness: AtomicU8,
     /// Slack integration state.
-    pub slack: Mutex<SlackState>,
+    pub(crate) slack: Mutex<SlackState>,
     /// When true, the emoji poller should not overwrite the device color.
-    pub event_animation_active: AtomicBool,
+    pub(crate) event_animation_active: AtomicBool,
     /// Handle to the currently running event animation task, if any.
-    pub event_animation_handle: Mutex<Option<JoinHandle<()>>>,
+    pub(crate) event_animation_handle: Mutex<Option<JoinHandle<()>>>,
     /// When true, background Slack polling should not overwrite the device color.
     /// Set by manual API color changes, cleared by Slack-driven color changes.
-    pub manual_override: AtomicBool,
+    pub(crate) manual_override: AtomicBool,
     /// Whether the Socket Mode WebSocket is currently connected.
-    pub socket_mode_connected: AtomicBool,
+    pub(crate) socket_mode_connected: AtomicBool,
 }
 
 /// Slack configuration and runtime state.
-pub struct SlackState {
+pub(crate) struct SlackState {
     /// Whether Slack integration is active.
-    pub enabled: bool,
+    pub(crate) enabled: bool,
     /// App-level token (`xapp-...`) for Socket Mode.
-    pub app_token: Option<String>,
+    pub(crate) app_token: Option<String>,
     /// Bot token (`xoxb-...`) for API calls.
-    pub bot_token: Option<String>,
+    pub(crate) bot_token: Option<String>,
     /// User token (`xoxp-...`) for profile read/write.
-    pub user_token: Option<String>,
+    pub(crate) user_token: Option<String>,
     /// Emoji-to-color mappings (emoji → hex color string).
-    pub emoji_colors: HashMap<String, String>,
+    pub(crate) emoji_colors: HashMap<String, String>,
     /// The authenticated user's Slack ID (for filtering `user_change` events).
-    pub user_id: Option<String>,
+    pub(crate) user_id: Option<String>,
     /// Event-driven animation rules.
-    pub rules: Vec<SlackRule>,
+    pub(crate) rules: Vec<SlackRule>,
     /// Handle to the Socket Mode WebSocket task, if running.
-    pub socket_handle: Option<JoinHandle<()>>,
+    pub(crate) socket_handle: Option<JoinHandle<()>>,
     /// Handle to the background emoji polling task, if running.
-    pub emoji_poll_handle: Option<JoinHandle<()>>,
+    pub(crate) emoji_poll_handle: Option<JoinHandle<()>>,
 }
 
 impl AppState {

@@ -64,12 +64,12 @@ impl HidSlickyDevice {
     ///
     /// Returns [`StatusLightError::DeviceNotFound`] if no device is connected,
     /// or [`StatusLightError::MultipleDevices`] if more than one is found.
-    pub fn open() -> Result<Self> {
-        let devices = Self::enumerate()?;
+    pub fn open(api: &hidapi::HidApi) -> Result<Self> {
+        let devices = Self::enumerate(api)?;
         match devices.len() {
             0 => Err(StatusLightError::DeviceNotFound),
             1 => {
-                let (device, serial) = hid_helpers::open_first_hid(SLICKY_VID_PID)?;
+                let (device, serial) = hid_helpers::open_first_hid(api, SLICKY_VID_PID)?;
                 Ok(Self { device, serial })
             }
             count => Err(StatusLightError::MultipleDevices { count }),
@@ -77,14 +77,14 @@ impl HidSlickyDevice {
     }
 
     /// Open a Slicky device by its serial number.
-    pub fn open_serial(serial: &str) -> Result<Self> {
-        let (device, serial) = hid_helpers::open_hid_by_serial(SLICKY_VID_PID, serial)?;
+    pub fn open_serial(api: &hidapi::HidApi, serial: &str) -> Result<Self> {
+        let (device, serial) = hid_helpers::open_hid_by_serial(api, SLICKY_VID_PID, serial)?;
         Ok(Self { device, serial })
     }
 
     /// List all connected Slicky devices.
-    pub fn enumerate() -> Result<Vec<DeviceInfo>> {
-        hid_helpers::enumerate_hid(SLICKY_VID_PID, "slicky")
+    pub fn enumerate(api: &hidapi::HidApi) -> Result<Vec<DeviceInfo>> {
+        hid_helpers::enumerate_hid(api, SLICKY_VID_PID, "slicky")
     }
 }
 

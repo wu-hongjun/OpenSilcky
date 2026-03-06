@@ -118,17 +118,21 @@ impl DeviceDriver for EposDriver {
         }]
     }
 
-    fn enumerate(&self) -> Result<Vec<DeviceInfo>> {
-        hid_helpers::enumerate_hid(VID_PID, "epos")
+    fn enumerate(&self, api: &hidapi::HidApi) -> Result<Vec<DeviceInfo>> {
+        hid_helpers::enumerate_hid(api, VID_PID, "epos")
     }
 
-    fn open(&self) -> Result<Box<dyn StatusLightDevice>> {
-        let (device, serial) = hid_helpers::open_first_hid(VID_PID)?;
+    fn open(&self, api: &hidapi::HidApi) -> Result<Box<dyn StatusLightDevice>> {
+        let (device, serial) = hid_helpers::open_first_hid(api, VID_PID)?;
         Ok(Box::new(HidEposDevice { device, serial }))
     }
 
-    fn open_serial(&self, serial: &str) -> Result<Box<dyn StatusLightDevice>> {
-        let (device, serial) = hid_helpers::open_hid_by_serial(VID_PID, serial)?;
+    fn open_serial(
+        &self,
+        api: &hidapi::HidApi,
+        serial: &str,
+    ) -> Result<Box<dyn StatusLightDevice>> {
+        let (device, serial) = hid_helpers::open_hid_by_serial(api, VID_PID, serial)?;
         Ok(Box::new(HidEposDevice { device, serial }))
     }
 }

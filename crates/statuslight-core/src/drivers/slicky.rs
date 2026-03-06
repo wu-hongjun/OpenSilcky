@@ -26,15 +26,19 @@ impl DeviceDriver for SlickyDriver {
         }]
     }
 
-    fn enumerate(&self) -> Result<Vec<DeviceInfo>> {
-        HidSlickyDevice::enumerate()
+    fn enumerate(&self, api: &hidapi::HidApi) -> Result<Vec<DeviceInfo>> {
+        HidSlickyDevice::enumerate(api)
     }
 
-    fn open(&self) -> Result<Box<dyn StatusLightDevice>> {
-        Ok(Box::new(HidSlickyDevice::open()?))
+    fn open(&self, api: &hidapi::HidApi) -> Result<Box<dyn StatusLightDevice>> {
+        Ok(Box::new(HidSlickyDevice::open(api)?))
     }
 
-    fn open_serial(&self, serial: &str) -> Result<Box<dyn StatusLightDevice>> {
-        Ok(Box::new(HidSlickyDevice::open_serial(serial)?))
+    fn open_serial(
+        &self,
+        api: &hidapi::HidApi,
+        serial: &str,
+    ) -> Result<Box<dyn StatusLightDevice>> {
+        Ok(Box::new(HidSlickyDevice::open_serial(api, serial)?))
     }
 }

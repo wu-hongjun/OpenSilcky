@@ -54,9 +54,16 @@ impl DeviceRegistry {
     /// Returns a list of `(driver_id, device_info)` tuples.
     /// Drivers that fail to enumerate are logged and skipped.
     pub fn enumerate_all(&self) -> Vec<(String, DeviceInfo)> {
+        let api = match hidapi::HidApi::new() {
+            Ok(api) => api,
+            Err(e) => {
+                log::warn!("Failed to initialize HidApi: {e}");
+                return Vec::new();
+            }
+        };
         let mut all = Vec::new();
         for driver in &self.drivers {
-            match driver.enumerate() {
+            match driver.enumerate(&api) {
                 Ok(devices) => {
                     for info in devices {
                         all.push((driver.id().to_string(), info));
@@ -77,9 +84,10 @@ impl DeviceRegistry {
     /// is tried. Any other error (e.g. `MultipleDevices`, `Hid`) is returned
     /// immediately.
     pub fn open_any(&self) -> Result<Box<dyn StatusLightDevice>> {
+        let api = hidapi::HidApi::new()?;
         let last_error = StatusLightError::DeviceNotFound;
         for driver in &self.drivers {
-            match driver.open() {
+            match driver.open(&api) {
                 Ok(device) => return Ok(device),
                 Err(StatusLightError::DeviceNotFound) => continue,
                 Err(e) => return Err(e),
@@ -94,14 +102,15 @@ impl DeviceRegistry {
         driver_id: &str,
         serial: Option<&str>,
     ) -> Result<Box<dyn StatusLightDevice>> {
+        let api = hidapi::HidApi::new()?;
         let driver = self
             .drivers
             .iter()
             .find(|d| d.id() == driver_id)
             .ok_or_else(|| StatusLightError::UnknownDriver(driver_id.to_string()))?;
         match serial {
-            Some(s) => driver.open_serial(s),
-            None => driver.open(),
+            Some(s) => driver.open_serial(&api, s),
+            None => driver.open(&api),
         }
     }
 }

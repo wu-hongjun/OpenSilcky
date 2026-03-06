@@ -7,8 +7,11 @@ use crate::device::DeviceInfo;
 use crate::error::{Result, StatusLightError};
 
 /// Enumerate all HID devices matching any of the given VID/PID pairs.
-pub fn enumerate_hid(vid_pid_pairs: &[(u16, u16)], driver_id: &str) -> Result<Vec<DeviceInfo>> {
-    let api = hidapi::HidApi::new()?;
+pub fn enumerate_hid(
+    api: &hidapi::HidApi,
+    vid_pid_pairs: &[(u16, u16)],
+    driver_id: &str,
+) -> Result<Vec<DeviceInfo>> {
     let devices = api
         .device_list()
         .filter(|d| {
@@ -33,8 +36,10 @@ pub fn enumerate_hid(vid_pid_pairs: &[(u16, u16)], driver_id: &str) -> Result<Ve
 ///
 /// Returns the opened device and its serial number (if available).
 /// Returns [`StatusLightError::DeviceNotFound`] if no matching device is found.
-pub fn open_first_hid(vid_pid_pairs: &[(u16, u16)]) -> Result<(hidapi::HidDevice, Option<String>)> {
-    let api = hidapi::HidApi::new()?;
+pub fn open_first_hid(
+    api: &hidapi::HidApi,
+    vid_pid_pairs: &[(u16, u16)],
+) -> Result<(hidapi::HidDevice, Option<String>)> {
     let info = api
         .device_list()
         .find(|d| {
@@ -45,7 +50,7 @@ pub fn open_first_hid(vid_pid_pairs: &[(u16, u16)]) -> Result<(hidapi::HidDevice
         .ok_or(StatusLightError::DeviceNotFound)?;
 
     let serial = info.serial_number().map(|s| s.to_string());
-    let device = info.open_device(&api)?;
+    let device = info.open_device(api)?;
     Ok((device, serial))
 }
 
@@ -53,10 +58,10 @@ pub fn open_first_hid(vid_pid_pairs: &[(u16, u16)]) -> Result<(hidapi::HidDevice
 ///
 /// Returns [`StatusLightError::DeviceNotFound`] if no matching device is found.
 pub fn open_hid_by_serial(
+    api: &hidapi::HidApi,
     vid_pid_pairs: &[(u16, u16)],
     serial: &str,
 ) -> Result<(hidapi::HidDevice, Option<String>)> {
-    let api = hidapi::HidApi::new()?;
     let info = api
         .device_list()
         .find(|d| {
@@ -68,6 +73,6 @@ pub fn open_hid_by_serial(
         .ok_or(StatusLightError::DeviceNotFound)?;
 
     let serial = info.serial_number().map(|s| s.to_string());
-    let device = info.open_device(&api)?;
+    let device = info.open_device(api)?;
     Ok((device, serial))
 }
