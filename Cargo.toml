@@ -6,6 +6,9 @@ members = [
     "crates/statuslight-daemon",
     "crates/statuslight-ffi",
 ]
+exclude = [
+    "tools/slicky-probe",
+]
 
 [workspace.dependencies]
 # Shared across crates

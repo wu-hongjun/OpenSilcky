@@ -65,4 +65,15 @@ int32_t statuslight_get_brightness(void);
  */
 int32_t statuslight_device_count(void);
 
+/**
+ * Read the current color from the device.
+ *
+ * Returns 0 on success, -11 if readback is not supported, other negative codes on error.
+ *
+ * # Safety
+ *
+ * `r`, `g`, `b` must be valid, non-null pointers to writable `u8` memory.
+ */
+int32_t statuslight_get_color(uint8_t *r, uint8_t *g, uint8_t *b);
+
 #endif  /* STATUSLIGHT_FFI_H */
