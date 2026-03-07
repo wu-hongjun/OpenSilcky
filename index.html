@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Open-source driver & tools for the Lexcelon Slicky USB status light">
+        <meta name="description" content="Open-source driver & tools for USB status lights">
       
       
       
@@ -268,7 +268,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="reference/cli/" class="md-tabs__link">
+        <a href="reference/supported-devices/" class="md-tabs__link">
           
   
   
@@ -616,6 +616,8 @@
       
         
       
+        
+      
     
     
     
@@ -658,6 +660,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference/supported-devices/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supported Devices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -988,8 +1018,8 @@
 
 
 <h1 id="statuslight">StatusLight<a class="headerlink" href="#statuslight" title="Permanent link">&para;</a></h1>
-<p><strong>Open-source driver and tools for the <a href="https://www.lexcelon.com/products/slicky">Lexcelon Slicky</a> USB status light.</strong></p>
-<p>The Slicky is a USB-connected desk light that communicates your availability via color — red for busy, green for available, and any custom color you choose. Lexcelon stopped maintaining the original driver, so we built an open-source replacement in Rust.</p>
+<p><strong>Open-source driver and tools for USB status lights.</strong> Officially supports the <a href="https://www.lexcelon.com/products/slicky">Lexcelon Slicky</a>, with community support for <a href="reference/supported-devices/">7 additional device families</a>.</p>
+<p>A USB status light communicates your availability via color — red for busy, green for available, and any custom color you choose. StatusLight provides a unified interface to control these lights from the command line, an HTTP API, or a native macOS app.</p>
 <h2 id="whats-included">What's Included<a class="headerlink" href="#whats-included" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1020,7 +1050,8 @@
 <h2 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Set the light to any RGB color or named preset</li>
-<li>Control via CLI, HTTP API, or C FFI</li>
+<li>Multi-device support — control any of <a href="reference/supported-devices/">22 USB status lights</a> from 8 manufacturers</li>
+<li>Control via CLI, HTTP API, native macOS app, or C FFI</li>
 <li>Automatic Slack status sync — your light matches your Slack status emoji</li>
 <li>USB hot-plug resilience — reconnects automatically</li>
 <li>macOS and Linux support</li>
