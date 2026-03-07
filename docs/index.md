@@ -1,8 +1,8 @@
 # StatusLight
 
-**Open-source driver and tools for the [Lexcelon Slicky](https://www.lexcelon.com/products/slicky) USB status light.**
+**Open-source driver and tools for USB status lights.** Officially supports the [Lexcelon Slicky](https://www.lexcelon.com/products/slicky), with community support for [7 additional device families](reference/supported-devices.md).
 
-The Slicky is a USB-connected desk light that communicates your availability via color — red for busy, green for available, and any custom color you choose. Lexcelon stopped maintaining the original driver, so we built an open-source replacement in Rust.
+A USB status light communicates your availability via color — red for busy, green for available, and any custom color you choose. StatusLight provides a unified interface to control these lights from the command line, an HTTP API, or a native macOS app.
 
 ## What's Included
 
@@ -16,7 +16,8 @@ The Slicky is a USB-connected desk light that communicates your availability via
 ## Features
 
 - Set the light to any RGB color or named preset
-- Control via CLI, HTTP API, or C FFI
+- Multi-device support — control any of [22 USB status lights](reference/supported-devices.md) from 8 manufacturers
+- Control via CLI, HTTP API, native macOS app, or C FFI
 - Automatic Slack status sync — your light matches your Slack status emoji
 - USB hot-plug resilience — reconnects automatically
 - macOS and Linux support

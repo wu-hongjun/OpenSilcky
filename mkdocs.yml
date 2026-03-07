@@ -1,5 +1,5 @@
 site_name: StatusLight
-site_description: Open-source driver & tools for the Lexcelon Slicky USB status light
+site_description: Open-source driver & tools for USB status lights
 site_url: https://wu-hongjun.github.io/StatusLight/
 repo_url: https://github.com/wu-hongjun/StatusLight
 repo_name: wu-hongjun/StatusLight
@@ -38,6 +38,7 @@ nav:
       - Quick Start: getting-started/quickstart.md
       - Slack Setup: slack-setup/index.md
   - Reference:
+      - Supported Devices: reference/supported-devices.md
       - CLI: reference/cli.md
       - Daemon API: reference/daemon-api.md
       - FFI: reference/ffi.md
