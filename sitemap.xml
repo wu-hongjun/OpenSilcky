@@ -1,119 +1,119 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/</loc>
+         <loc>https://statuslight.hongjunwu.com/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/development/architecture/</loc>
+         <loc>https://statuslight.hongjunwu.com/development/architecture/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/development/contributing/</loc>
+         <loc>https://statuslight.hongjunwu.com/development/contributing/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/getting-started/installation/</loc>
+         <loc>https://statuslight.hongjunwu.com/getting-started/installation/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/getting-started/quickstart/</loc>
+         <loc>https://statuslight.hongjunwu.com/getting-started/quickstart/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/001-full-stack-scaffold/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/001-full-stack-scaffold/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/002-ci-cd-setup/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/002-ci-cd-setup/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/003-github-pages/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/003-github-pages/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/004-dmg-release/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/004-dmg-release/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/005-ux-overhaul/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/005-ux-overhaul/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/006-app-bundle/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/006-app-bundle/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/007-swiftui-gui/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/007-swiftui-gui/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/008-animations-customization/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/008-animations-customization/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/009-dual-ui-cli-completeness/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/009-dual-ui-cli-completeness/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/014-slack-integration-overhaul/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/014-slack-integration-overhaul/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/015-streamlined-slack-setup/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/015-streamlined-slack-setup/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/016-auto-update-install/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/016-auto-update-install/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/017-bidirectional-slack-sync/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/017-bidirectional-slack-sync/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/020-multi-device-drivers-brightness/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/020-multi-device-drivers-brightness/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/021-fix-preexisting-issues/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/021-fix-preexisting-issues/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/022-device-state-reading/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/022-device-state-reading/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/023-button-status-sync/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/023-button-status-sync/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/plans/024-fix-app-freeze/</loc>
+         <loc>https://statuslight.hongjunwu.com/plans/024-fix-app-freeze/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/reference/cli/</loc>
+         <loc>https://statuslight.hongjunwu.com/reference/cli/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/reference/daemon-api/</loc>
+         <loc>https://statuslight.hongjunwu.com/reference/daemon-api/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/reference/ffi/</loc>
+         <loc>https://statuslight.hongjunwu.com/reference/ffi/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/reference/protocol/</loc>
+         <loc>https://statuslight.hongjunwu.com/reference/protocol/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/reference/supported-devices/</loc>
+         <loc>https://statuslight.hongjunwu.com/reference/supported-devices/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
     <url>
-         <loc>https://wu-hongjun.github.io/StatusLight/slack-setup/</loc>
+         <loc>https://statuslight.hongjunwu.com/slack-setup/</loc>
          <lastmod>2026-03-07</lastmod>
     </url>
 </urlset>
